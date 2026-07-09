@@ -397,12 +397,27 @@
   }
 
   function clearBlockCommentBadges() {
+    for (const container of document.querySelectorAll("[data-comment-badges]")) {
+      container.remove();
+    }
     for (const badge of document.querySelectorAll("[data-comment-badge]")) {
       badge.remove();
     }
   }
 
+  function ensureBlockBadgeContainer(block) {
+    let container = block.querySelector(":scope > [data-comment-badges]");
+    if (!container) {
+      container = document.createElement("div");
+      container.className = "review-comment-badges";
+      container.dataset.commentBadges = "";
+      block.appendChild(container);
+    }
+    return container;
+  }
+
   function addBlockCommentBadge(block, thread, number) {
+    const container = ensureBlockBadgeContainer(block);
     const badge = document.createElement("button");
     badge.type = "button";
     badge.className = "cx review-comment-badge";
@@ -415,7 +430,7 @@
       event.stopPropagation();
       activate(thread.id, true);
     });
-    block.appendChild(badge);
+    container.appendChild(badge);
   }
 
   function highlightThreadSelection(block, thread, number) {
@@ -823,6 +838,9 @@
     document.querySelectorAll(".cx.is-active, .cmt.is-active").forEach((element) => {
       element.classList.remove("is-active");
     });
+    if (!commentId) {
+      return;
+    }
     document.querySelectorAll(commentSelector(commentId)).forEach((highlight) => {
       highlight.classList.add("is-active");
     });
@@ -1170,7 +1188,16 @@
     if (captureImageBlockClick(event)) {
       return;
     }
+    clearActiveComment();
     closeComposer();
+  }
+
+  function clearActiveComment() {
+    if (!state.activeCommentId) {
+      return;
+    }
+    state.activeCommentId = null;
+    setActiveClasses(null);
   }
 
   function captureImageBlockClick(event) {

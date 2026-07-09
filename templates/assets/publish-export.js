@@ -182,6 +182,7 @@
       parent.removeChild(element);
     });
     clone.querySelectorAll(".review-comment-badge").forEach((node) => node.remove());
+    clone.querySelectorAll(".review-comment-badges").forEach((node) => node.remove());
 
     await embedImages(clone);
 

@@ -1013,10 +1013,18 @@ textarea.cmt-input, input.cmt-input {
   background: var(--paper-2);
   border-radius: var(--r-sm);
 }
-.review-comment-badge {
+.review-comment-badges {
   position: absolute;
   top: 10px;
   right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  z-index: 1;
+}
+.review-comment-badge {
   min-height: 28px;
   padding: 4px 8px;
   color: var(--open);
