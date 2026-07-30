@@ -365,7 +365,6 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
   border: 1px solid var(--line-1); border-radius: var(--r-xs); padding: 1px 5px;
   color: color-mix(in srgb, var(--ink) 88%, var(--brand));
 }
-.lead-note { font-size: var(--fs-lead); line-height: 1.55; color: var(--ink-2); }
 .decision-panel {
   border: 1px solid var(--line-2);
   border-left: 3px solid var(--brand);
@@ -376,12 +375,6 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
 }
 .decision-panel > *:first-child { margin-top: 0; }
 .decision-panel > *:last-child { margin-bottom: 0; }
-
-.lead {
-  font-size: var(--fs-lead);
-  line-height: 1.55;
-}
-.lead strong { font-weight: inherit; }
 
 .document-header {
   margin-bottom: var(--sp-6);
@@ -564,12 +557,16 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
   background: var(--paper);
 }
 .table-cap {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  display: flex; align-items: baseline; gap: 12px;
   padding: 10px 14px; border-bottom: 1px solid var(--line-1); background: var(--paper-2);
   font-size: var(--fs-caption); color: var(--ink-3); flex-wrap: wrap;
 }
 .table-cap .t-no { font-family: var(--font-mono); font-weight: 600; color: var(--ink-2); }
-.table-cap .t-title { color: var(--ink); font-weight: 600; font-size: var(--fs-small); }
+/* 表番号は左端に置き、表題は残り幅の中央に置く */
+.table-cap .t-title {
+  color: var(--ink); font-weight: 600; font-size: var(--fs-small);
+  flex: 1; text-align: center;
+}
 .table-scroll { overflow-x: auto; }
 table.cmp { border-collapse: separate; border-spacing: 0; width: 100%; font-size: var(--fs-small); min-width: 720px; }
 table.cmp th, table.cmp td { padding: var(--row-pad); text-align: left; vertical-align: top; border-bottom: 1px solid var(--line-1); }

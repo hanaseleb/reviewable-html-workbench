@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import threading
 import time
@@ -19,9 +20,13 @@ from scripts.html_review_workbench.event_bus import EventBus, format_sse
 DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60
 
 
+STATE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
 class ReviewPreviewHandler(SimpleHTTPRequestHandler):
     comments_route = "/annotations/comments.json"
     checklist_route = "/annotations/checklist-state.json"
+    state_route_prefix = "/annotations/state/"
     events_route = "/events"
     _last_activity: float = 0.0
     _lock = threading.Lock()
@@ -63,6 +68,9 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         self.touch_activity()
         if self._path() == self.checklist_route:
             self._handle_checklist_put()
+            return
+        if self._path().startswith(self.state_route_prefix):
+            self._handle_state_put(self._path())
             return
         if self._path() != self.comments_route:
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -113,6 +121,37 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         self._send_json({"ok": True, "path": "annotations/checklist-state.json"})
+
+    def _handle_state_put(self, path: str) -> None:
+        """操作部品が触った結果を任意の名前で保存する。
+
+        `PUT /annotations/state/<name>.json` を受け、`annotations/state/<name>.json` へ書く。
+        名前は英数字とハイフン・アンダースコアだけに限り、path traversal を防ぐ。
+        読み出しは静的配信をそのまま使うため、ここでは書き込みだけを扱う。
+        端末をまたいで同じ状態を見せることが目的で、同時更新は後勝ちとする。
+        """
+        name = path[len(self.state_route_prefix) :]
+        if not name.endswith(".json") or not STATE_NAME_RE.match(name[: -len(".json")]):
+            self._send_json(
+                {"ok": False, "error": "state name must match [A-Za-z0-9][A-Za-z0-9_-]{0,63}.json"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            return
+        try:
+            payload = json.loads(self.rfile.read(_content_length(self)).decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        if not isinstance(payload, dict) or not isinstance(payload.get("state"), dict):
+            self._send_json(
+                {"ok": False, "error": "state payload must contain a state object"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            return
+        target = self.root / "annotations" / "state" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._send_json({"ok": True, "path": f"annotations/state/{name}"})
 
     def _handle_sse(self) -> None:
         self.send_response(HTTPStatus.OK)

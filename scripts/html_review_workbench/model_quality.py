@@ -80,10 +80,12 @@ def check_model_quality(model_path: Path) -> ModelQualityResult:
 def _check_html_block(block_id: str, content: str, errors: list[str]) -> None:
     if not HTML_TAG_RE.search(content):
         errors.append(f"html block {block_id} has no HTML structure")
-    if "<script" in content.lower():
-        errors.append(f"html block {block_id} contains a script tag")
-    if re.search(r"\son[a-z]+\s*=", content, flags=re.IGNORECASE):
-        errors.append(f"html block {block_id} contains an inline event handler")
+    # inline script は操作部品 (スライダー・トグル・並べ替え等) のために許可する。
+    # 禁止するのは外部 host からの読み込みだけで、bundle が手元で完結する性質を保つ。
+    if re.search(r"<script[^>]*\bsrc\s*=", content, flags=re.IGNORECASE):
+        errors.append(f"html block {block_id} loads an external script")
+    if re.search(r"""<link[^>]*\bhref\s*=\s*["']?https?://""", content, flags=re.IGNORECASE):
+        errors.append(f"html block {block_id} loads an external stylesheet")
 
 
 def _check_callout_block(block_id: str, content: str, errors: list[str]) -> None:

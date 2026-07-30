@@ -11,7 +11,6 @@
 | 桁揃え数値 | `num` | `<td><span class="num">1,024</span></td>` (表中の数値列に使う) |
 | 推奨パネル | `reco` / `reco-tag` | `<div class="reco"><span class="reco-tag">推奨</span><p>案 B を採る。理由は…</p></div>` |
 | 決定の枠囲み | `decision-panel` | `<div class="decision-panel"><p>…</p></div>` |
-| 導入段落の強調 | `lead` / `lead-note` | `<p class="lead">この章では…</p>` (章冒頭の導入段落に使う) |
 | コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
 
 ### 多軸の比較表 (`table.cmp`)
@@ -51,5 +50,6 @@
 - 軸が 3 つ以上あるなら `table.cmp` + `axis` を使い、推奨案の列に `pick` を付ける。
 - 評価軸 (容易さ・成熟度・リスク等) は文字だけでなく `rate` の点表示でも符号化する。
 - 推奨・決定は本文の段落に埋めず、`reco` または `decision-panel` で独立させる。
+- 段落を文字の大きさで強調しない。強調したい段落があるなら、それは推奨・決定・注意のいずれかなので、`reco` / `decision-panel` / `callout` block のうち内容に合うものを使う。文書全体の導入は `metadata.deck` が担うので、節ごとに導入段落を作らない。
 - これらは class 指定だけで効く。`style` 属性の直書きで同等の見た目を再実装しない。
 - 色は `metadata.palette` の `brand` / `brand_soft` だけ主題に合わせて上書きできる。コントラスト比は `check-model` / `render` / `validate` が WCAG 4.5:1 で検査し、不足すると error で止まる (brand は最も薄い地色との比、brand_soft は本文色との比、両方指定時は 2 色の相互比も見る)。

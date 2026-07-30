@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.html_review_workbench.common import (
+    INTERACTIVE_STATE_JS_PATH,
     MERMAID_INIT_JS,
     PUBLISH_OVERRIDES_CSS_PATH,
     REPO_ROOT,
@@ -69,6 +70,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
     article = _embed_images(article, root)
     mermaid_script = _inline_mermaid_script(source_html, article, root)
     checklist_script = _inline_checklist_script(article, root)
+    interactive_state_script = _inline_interactive_state_script(article, root)
     document_id = _extract_attr(source_html, r'data-document-id="([^"]*)"') or ""
 
     title = _extract_text(article, r'<h1 class="doc-title">(.*?)</h1>') or "document"
@@ -85,6 +87,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
         is_focus=is_focus,
         mermaid_script=mermaid_script,
         checklist_script=checklist_script,
+        interactive_state_script=interactive_state_script,
         document_id=document_id,
     )
 
@@ -189,6 +192,22 @@ def _inline_checklist_script(article: str, root: Path) -> str:
     return f"<script>\n{path.read_text(encoding='utf-8')}\n</script>\n"
 
 
+def _inline_interactive_state_script(article: str, root: Path) -> str:
+    """操作部品の状態保存ヘルパーを standalone HTML に inline 化する。
+
+    RHWState を使わない資料では何も差し込まない。
+    standalone では preview server が無いため、保存は localStorage へ落ちる。
+    """
+    if "RHWState" not in article:
+        return ""
+    path = root / "assets" / "interactive-state.js"
+    if not path.is_file():
+        path = INTERACTIVE_STATE_JS_PATH
+    if not path.is_file():
+        raise PublishError(f"assets/interactive-state.js not found in {root}")
+    return f"<script>\n{path.read_text(encoding='utf-8')}\n</script>\n"
+
+
 def _load_publish_overrides(root: Path) -> str:
     """公開用 CSS override を bundle asset から読み、旧 bundle では template asset に fallback する。"""
     path = root / "assets" / "publish-overrides.css"
@@ -231,6 +250,7 @@ def _assemble(
     is_focus: bool,
     mermaid_script: str = "",
     checklist_script: str = "",
+    interactive_state_script: str = "",
     document_id: str = "",
 ) -> str:
     """公開用 standalone HTML を組み立てる。"""
@@ -256,6 +276,8 @@ def _assemble(
         f"{publish_overrides}"
         f"</style>\n"
         f"{mermaid_script}"
+        # article 内の inline script より先に RHWState を定義する必要があるため head に置く
+        f"{interactive_state_script}"
         f"</head>\n"
         f'<body class="is-published"{doc_id_attr}>\n'
         f'<main class="canvas{focus_class}">\n'

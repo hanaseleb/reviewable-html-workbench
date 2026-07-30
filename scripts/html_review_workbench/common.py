@@ -17,6 +17,7 @@ MERMAID_INIT_JS = "mermaid.initialize({startOnLoad: true, theme: 'dark', securit
 PUBLISH_EXPORT_JS_PATH = REPO_ROOT / "templates" / "assets" / "publish-export.js"
 PUBLISH_OVERRIDES_CSS_PATH = REPO_ROOT / "templates" / "assets" / "publish-overrides.css"
 TASK_CHECKLIST_JS_PATH = REPO_ROOT / "templates" / "assets" / "task-checklist.js"
+INTERACTIVE_STATE_JS_PATH = REPO_ROOT / "templates" / "assets" / "interactive-state.js"
 
 
 def now_iso() -> str:

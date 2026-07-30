@@ -31,6 +31,7 @@ COMMENTS_JS_PATH = ROOT / "templates" / "review-comments.js"
 MERMAID_JS_PATH = ROOT / "templates" / "assets" / "mermaid.min.js"
 DIAGRAM_ZOOM_JS_PATH = ROOT / "templates" / "assets" / "diagram-zoom.js"
 TASK_CHECKLIST_JS_PATH = ROOT / "templates" / "assets" / "task-checklist.js"
+INTERACTIVE_STATE_JS_PATH = ROOT / "templates" / "assets" / "interactive-state.js"
 
 
 def render_bundle(model_path: Path, output_dir: Path) -> Path:
@@ -87,12 +88,14 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
     shutil.copyfile(PUBLISH_EXPORT_JS_PATH, assets_dir / "publish-export.js")
     shutil.copyfile(COMMENTS_JS_PATH, assets_dir / "review-comments.js")
     shutil.copyfile(TASK_CHECKLIST_JS_PATH, assets_dir / "task-checklist.js")
+    shutil.copyfile(INTERACTIVE_STATE_JS_PATH, assets_dir / "interactive-state.js")
     asset_outputs = [
         "assets/style.css",
         "assets/publish-overrides.css",
         "assets/publish-export.js",
         "assets/review-comments.js",
         "assets/task-checklist.js",
+        "assets/interactive-state.js",
     ]
     if has_rendered_mermaid:
         if not MERMAID_JS_PATH.is_file():

@@ -58,6 +58,92 @@ class ModelQualityTest(unittest.TestCase):
 
         self.assertTrue(result.ok, result.errors)
 
+    def test_check_model_accepts_inline_script_for_interactive_controls(self) -> None:
+        """操作部品 (スライダー・並べ替え等) のための inline script を通す。
+
+        Artifact は CSP 下の inline JavaScript を許しており、同じことを書けるようにする。
+        """
+        result = check_model_quality(
+            _write_model(
+                {
+                    "id": "slider",
+                    "type": "html",
+                    "heading_level": 2,
+                    "content": (
+                        '<label>duration <input type="range" id="dur" min="0" max="2000"></label>'
+                        "<script>document.getElementById('dur')"
+                        ".addEventListener('input', function () {});</script>"
+                    ),
+                }
+            )
+        )
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_check_model_accepts_inline_event_handler(self) -> None:
+        result = check_model_quality(
+            _write_model(
+                {
+                    "id": "toggle",
+                    "type": "html",
+                    "heading_level": 2,
+                    "content": '<button type="button" onclick="void 0">切り替え</button>',
+                }
+            )
+        )
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_check_model_rejects_external_script_src(self) -> None:
+        """外部 host からの読み込みは bundle が手元で完結しなくなるので弾く。"""
+        result = check_model_quality(
+            _write_model(
+                {
+                    "id": "cdn",
+                    "type": "html",
+                    "heading_level": 2,
+                    "content": '<div><script src="https://cdn.example.com/chart.js"></script></div>',
+                }
+            )
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("html block cdn loads an external script", result.errors)
+
+    def test_check_model_rejects_relative_script_src(self) -> None:
+        """相対 path の外部 file 読み込みも bundle に含まれないので弾く。"""
+        result = check_model_quality(
+            _write_model(
+                {
+                    "id": "local-src",
+                    "type": "html",
+                    "heading_level": 2,
+                    "content": '<div><script src="./my-widget.js"></script></div>',
+                }
+            )
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("html block local-src loads an external script", result.errors)
+
+    def test_check_model_rejects_external_stylesheet(self) -> None:
+        result = check_model_quality(
+            _write_model(
+                {
+                    "id": "web-font",
+                    "type": "html",
+                    "heading_level": 2,
+                    "content": (
+                        '<div><link rel="stylesheet" '
+                        'href="https://fonts.googleapis.com/css2?family=Inter"></div>'
+                    ),
+                }
+            )
+        )
+
+        self.assertFalse(result.ok)
+        self.assertIn("html block web-font loads an external stylesheet", result.errors)
+
     def test_check_model_accepts_mermaid_v11_diagram_prefixes(self) -> None:
         prefixes = [
             "flowchart",
