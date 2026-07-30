@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.html_review_workbench.palette import validate_palette
 from scripts.html_review_workbench.schema_validation import validate
 
 
@@ -137,6 +138,17 @@ def _validate_input_model(manifest: dict[str, object], errors: list[str]) -> Non
     model_path = Path(input_info["path"])
     if model_path.is_file():
         _validate_json_schema(model_path, DOCUMENT_MODEL_SCHEMA_PATH, "document model", errors)
+        _validate_palette(model_path, errors)
+
+
+def _validate_palette(model_path: Path, errors: list[str]) -> None:
+    """palette 指定のコントラスト比を bundle 検証でも検査する (render 前の check-model と同基準)。"""
+    try:
+        model = json.loads(model_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return  # JSON 不正は schema 検証側が報告する
+    if isinstance(model, dict):
+        errors.extend(validate_palette(model.get("metadata")))
 
 
 def _validate_json_schema(path: Path, schema_path: Path, label: str, errors: list[str]) -> None:

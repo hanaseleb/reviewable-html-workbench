@@ -84,6 +84,8 @@ TARGETS = (
         path=ROOT / "skills" / "visual-html-renderer" / "SKILL.md",
         fragments=(
             "md-file-prohibition",
+            "html-style-classes",
+            "html-design-guidance",
             "mermaid-kinds",
             "repo-root-resolution",
             "cli-commands-core",
@@ -119,6 +121,8 @@ TARGETS = (
         path=ROOT / "skills" / "reviewable-design-doc" / "SKILL.md",
         fragments=(
             "md-file-prohibition",
+            "html-style-classes",
+            "html-design-guidance",
             "mermaid-kinds",
             "repo-root-resolution",
             "cli-commands-core",

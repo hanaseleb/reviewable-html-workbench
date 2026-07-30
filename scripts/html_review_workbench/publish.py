@@ -14,7 +14,12 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from scripts.html_review_workbench.common import MERMAID_INIT_JS, PUBLISH_OVERRIDES_CSS_PATH, REPO_ROOT
+from scripts.html_review_workbench.common import (
+    MERMAID_INIT_JS,
+    PUBLISH_OVERRIDES_CSS_PATH,
+    REPO_ROOT,
+    TASK_CHECKLIST_JS_PATH,
+)
 
 ROOT = REPO_ROOT
 DIAGRAM_ZOOM_JS_PATH = ROOT / "templates" / "assets" / "diagram-zoom.js"
@@ -63,6 +68,8 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
     article = _strip_review_elements(article)
     article = _embed_images(article, root)
     mermaid_script = _inline_mermaid_script(source_html, article, root)
+    checklist_script = _inline_checklist_script(article, root)
+    document_id = _extract_attr(source_html, r'data-document-id="([^"]*)"') or ""
 
     title = _extract_text(article, r'<h1 class="doc-title">(.*?)</h1>') or "document"
     description = _extract_description(article)
@@ -77,6 +84,8 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
         article=article,
         is_focus=is_focus,
         mermaid_script=mermaid_script,
+        checklist_script=checklist_script,
+        document_id=document_id,
     )
 
     output.mkdir(parents=True, exist_ok=True)
@@ -165,6 +174,21 @@ def _inline_mermaid_script(source_html: str, article: str, root: Path) -> str:
     )
 
 
+def _inline_checklist_script(article: str, root: Path) -> str:
+    """作業チェックリスト asset を standalone HTML に inline 化する。
+
+    チェックボックスを含まない資料では何も差し込まない。
+    """
+    if "data-task-check" not in article:
+        return ""
+    path = root / "assets" / "task-checklist.js"
+    if not path.is_file():
+        path = TASK_CHECKLIST_JS_PATH
+    if not path.is_file():
+        raise PublishError(f"assets/task-checklist.js not found in {root}")
+    return f"<script>\n{path.read_text(encoding='utf-8')}\n</script>\n"
+
+
 def _load_publish_overrides(root: Path) -> str:
     """公開用 CSS override を bundle asset から読み、旧 bundle では template asset に fallback する。"""
     path = root / "assets" / "publish-overrides.css"
@@ -206,11 +230,15 @@ def _assemble(
     article: str,
     is_focus: bool,
     mermaid_script: str = "",
+    checklist_script: str = "",
+    document_id: str = "",
 ) -> str:
     """公開用 standalone HTML を組み立てる。"""
     esc_title = escape(title)
     esc_desc = escape(description)
     focus_class = " is-focus" if is_focus else ""
+    # チェックリストの保存 key は文書識別子に紐づくため、publish 版でも同じ値を残す
+    doc_id_attr = f' data-document-id="{escape(document_id, quote=True)}"' if document_id else ""
 
     return (
         f'<!DOCTYPE html>\n<html lang="{escape(lang)}" data-density="{escape(density)}">\n'
@@ -229,10 +257,12 @@ def _assemble(
         f"</style>\n"
         f"{mermaid_script}"
         f"</head>\n"
-        f'<body class="is-published">\n'
+        f'<body class="is-published"{doc_id_attr}>\n'
         f'<main class="canvas{focus_class}">\n'
         f'<div class="doc-shell">\n<div class="doc-grid">\n'
         f"{article}\n"
         f"</div>\n</div>\n"
-        f"</main>\n</body>\n</html>\n"
+        f"</main>\n"
+        f"{checklist_script}"
+        f"</body>\n</html>\n"
     )

@@ -90,6 +90,51 @@ HTML出力はテキスト変換ではなく、最終HTML bundleの情報設計�
 
 `html` blockはraw insertされるため、外部入力をそのまま混ぜない。入力由来の文字列はagentが意味単位へ再構成し、必要な箇所だけescape済みHTMLとして入れる。
 
+<!-- BEGIN SHARED: html-style-classes -->
+## html block で使える表現部品
+
+同梱の `style.css` には、`html` block 内でそのまま使える表現 class が実装済みである。比較・評価・推奨・決定がある内容では、素の `<table>` / `<p>` で終えず、該当する部品を選ぶ。
+
+| 用途 | class | 書き方 |
+|---|---|---|
+| 表番号 + 表題 | `table-wrap` / `table-cap` / `t-no` / `t-title` / `table-scroll` | `<figure class="table-wrap"><figcaption class="table-cap"><span class="t-no">表 1</span><span class="t-title">3 案の比較</span></figcaption><div class="table-scroll"><table>…</table></div></figure>` |
+| 表ヘッダの補助説明 | `axis-sub` | `<th scope="col">実装量<span class="axis-sub">行数の目安</span></th>` |
+| 5 段階評価 | `rate` + `good`/`mid`/`low` + `r1`〜`r5` + `pips` / `pip` | `<span class="rate good r4"><span class="pips"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span>容易</span>` (pip は常に 5 個。`rN` が塗る数、`good`/`mid`/`low` が色) |
+| 可否・対応状況 | `tag-yes` / `tag-no` / `tag-cell-note` | `<td><span class="tag-yes">対応</span><span class="tag-cell-note">v2.0 以降</span></td>` |
+| 桁揃え数値 | `num` | `<td><span class="num">1,024</span></td>` (表中の数値列に使う) |
+| 推奨パネル | `reco` / `reco-tag` | `<div class="reco"><span class="reco-tag">推奨</span><p>案 B を採る。理由は…</p></div>` |
+| 決定の枠囲み | `decision-panel` | `<div class="decision-panel"><p>…</p></div>` |
+| 導入段落の強調 | `lead` / `lead-note` | `<p class="lead">この章では…</p>` (章冒頭の導入段落に使う) |
+| コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
+
+使い分けの基準:
+
+- 比較表には `table-wrap` + `table-cap` で番号と表題を付ける。本文からの参照は「表 1」で行う。
+- 評価軸 (容易さ・成熟度・リスク等) は文字だけでなく `rate` の点表示でも符号化する。
+- 推奨・決定は本文の段落に埋めず、`reco` または `decision-panel` で独立させる。
+- これらは class 指定だけで効く。`style` 属性の直書きで同等の見た目を再実装しない。
+- 色は `metadata.palette` の `brand` / `brand_soft` だけ主題に合わせて上書きできる。コントラスト比は `check-model` / `render` / `validate` が WCAG 4.5:1 で検査し、不足すると error で止まる (brand は最も薄い地色との比、brand_soft は本文色との比、両方指定時は 2 色の相互比も見る)。
+
+## Style Classes Available in html Blocks
+
+The bundled `style.css` ships ready-to-use presentation classes for `html` blocks. When the content contains comparisons, ratings, recommendations, or decisions, do not stop at bare `<table>` / `<p>`: use `table-wrap` + `table-cap` (numbered table captions), `axis-sub` (header sub-labels), `rate good|mid|low r1..r5` with five `pip` elements (dot ratings), `tag-yes` / `tag-no` / `tag-cell-note` (availability cells), `num` (tabular figures), `reco` + `reco-tag` (recommendation panel), `decision-panel` (decision box), `lead` / `lead-note` (lead paragraphs), and `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` (code token coloring). Reference numbered tables from body text as "表 1" / "Table 1". These work by class alone; do not re-implement the same look with inline `style` attributes.
+<!-- END SHARED: html-style-classes -->
+
+<!-- BEGIN SHARED: html-design-guidance -->
+## 表現の質の指針
+
+見た目の判断に迷った時は、次の 4 つに従う。ユーザーが見た目の方向を明示した場合は、その指定が常に優先する。
+
+1. **AI が作りがちな見た目を避ける。** 次の定番の組み合わせは、指定が無い限り選ばない: cream 地 (#F4F1EA) + serif 見出し + terracotta accent / near-black 地 + acid-green や vermilion の一点差し / 絵文字を節の目印にする / 全要素センタリング / 一様な大きい角丸 / 角丸カードの左端 accent バー。
+2. **構造装飾は内容の事実を符号化する。** 01 / 02 / 03 のような番号は、内容が本当に順序を持つ時 (手順・時系列) だけ使う。区切り線・eyebrow・ラベルも、内容の区分を実際に表す時だけ入れ、装飾目的では入れない。
+3. **読む文書と操作する画面で作法を変える。** 一覧・ダッシュボード的な内容は上から順に読まれず走査される。要約を詳細より先に置き、状態は数値だけでなく形 (rate の点、tag-yes の色、callout の左帯) でも符号化して、注意が要る箇所が一目で分かるようにする。
+4. **余白は layout で作る。** 兄弟要素の間隔は `gap` を持つ flex / grid で作り、要素ごとの margin を積まない。幅の広い表・コード・図は自前の `overflow-x: auto` コンテナ (表は `table-scroll`) に入れ、ページ全体を横スクロールさせない。
+
+## Design Quality Guidance
+
+When unsure about visual choices, follow four rules; explicit user direction always wins. (1) Avoid stereotypical AI-generated looks — cream (#F4F1EA) with serif display and terracotta accent, near-black with a lone acid-green pop, emoji as section markers, centering everything, uniformly large border radii, accent bars on rounded cards. (2) Structural devices must encode facts: numbered markers (01/02/03) only when the content truly is a sequence; rules, eyebrows, and labels only when they mark real divisions. (3) Documents are read, dashboards are scanned: put summaries before detail and encode state in form (rating dots, tag colors, callout stripes), not numbers alone. (4) Create spacing with `gap` in flex/grid rather than stacked per-element margins, and give wide tables/code/diagrams their own `overflow-x: auto` container (`table-scroll` for tables) so the page body never scrolls sideways.
+<!-- END SHARED: html-design-guidance -->
+
 <!-- BEGIN SHARED: mermaid-kinds -->
 ## Mermaid 対応 kind と最小サンプル
 
@@ -199,6 +244,18 @@ rendererは `<h1>` を文書タイトルに使う。本文ブロックの見出�
 - 各 `heading_level: 2` ブロックの冒頭に、その章で扱う内容の文脈を示す導入段落を置く。
 - `html` block内で使う表、番号付きリスト、箇条書き、コードブロック、通常本文の構成。
 - 図示または画像が必要な箇所と、Mermaid sourceまたは生成画像prompt。
+- accent 色。主題の世界にある色 (対象領域の道具・素材・慣習色) から 1 色選び、`metadata.palette` に `light` / `dark` 別の `brand` / `brand_soft` として書く。決められない場合は `palette` を書かず既定 (青系) のままにする。大胆さは 1 箇所に集中させ、周囲は静かに保つ。accent が地色と競う場合は、色相を近づけるか彩度を落とす。コントラスト比 (WCAG 4.5:1) は `check-model` / `render` / `validate` が機械検査し、不足は error で止まる。
+
+```json
+"metadata": {
+  "palette": {
+    "light": { "brand": "#2f6093", "brand_soft": "#e8eff7" },
+    "dark":  { "brand": "#7fb0e6", "brand_soft": "#1b2b3d" }
+  }
+}
+```
+
+上書きできるのは `brand` / `brand_soft` だけ。中立色・地色・レビュー状態色 (open / reply / resolved) は固定で、変更できない。
 
 入力がMarkdownや箇条書きで整理されていても、記号構造をそのまま変換しない。最終HTMLで読みやすい単位へ組み替えてから文書モデルにする。
 
@@ -239,6 +296,8 @@ Natural requests such as `render this as HTML`, `turn this into HTML`, `create a
 - `section`, `text`, `table` block typeを最終モデルで使っていない。
 - `diagram` blockは有効なMermaid sourceを持ち、画像生成promptはsourceに無い事実を追加していない。
 - `image` blockは `source_path` が添付済みになるまで `render` しない。
+- 比較を出す箇所は `table-wrap` + `table-cap` で表に番号と表題を付けている。評価軸があるなら `rate` 等で視覚化している。
+- 推奨・決定は本文の段落に埋めず、`reco` または `decision-panel` で独立させている。
 
 ## Pre-render Self Review
 

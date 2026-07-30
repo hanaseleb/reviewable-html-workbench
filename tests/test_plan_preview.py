@@ -6,8 +6,8 @@ import shutil
 import tempfile
 import unittest
 import urllib.request
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 from scripts.html_review_workbench.plan_preview import (
     MARKER_FILE,
@@ -19,34 +19,84 @@ from scripts.html_review_workbench.plan_preview import (
     create_plan_preview,
     read_payload,
     stop_plan_preview,
+    validate_plan_preview_payload,
 )
+from scripts.html_review_workbench.render import render_bundle
 
 
 class PlanPreviewTest(unittest.TestCase):
-    def test_build_plan_preview_model_maps_plan_fields_to_blocks(self) -> None:
-        model = build_plan_preview_model(_payload(), "abc123")
+    def test_build_plan_preview_model_preserves_source_section_order_and_inserts_diagram(self) -> None:
+        model = build_plan_preview_model(validate_plan_preview_payload(_payload()), "abc123")
 
         self.assertEqual(model["document_id"], "plan-preview-abc123")
         self.assertEqual(model["title"], "Plan Preview Test")
-        block_ids = [block["id"] for block in model["blocks"]]
-        self.assertIn("plan-summary", block_ids)
-        self.assertIn("original-plan-text", block_ids)
-        self.assertIn("plan-phases", block_ids)
-        self.assertIn("key-changes", block_ids)
-        self.assertIn("plan-section-1", block_ids)
-        self.assertIn("plan-flow", block_ids)
-        self.assertIn("test-plan", block_ids)
-        self.assertIn("assumptions", block_ids)
-        self.assertIn("supplemental-context", block_ids)
-        original = next(block for block in model["blocks"] if block["id"] == "original-plan-text")
-        self.assertEqual(original["type"], "code")
-        self.assertIn("## 元の計画本文", original["content"])
-        self.assertIn("CLIでは読み取りにくい依存関係もHTMLで補足する。", original["content"])
-        section = next(block for block in model["blocks"] if block["id"] == "plan-section-1")
-        self.assertIn("CLI本文だけでは表現しにくい詳細", section["content"])
-        flow = next(block for block in model["blocks"] if block["id"] == "plan-flow")
-        self.assertIn("flowchart TD", flow["content"])
-        self.assertIn("CLI", flow["content"])
+        self.assertEqual(model["summary"], "Proposed plan preview (original structure preserved).")
+        blocks = model["blocks"]
+        self.assertEqual(
+            [block.get("title") for block in blocks],
+            ["Context", "実装手順", "処理フロー", "検証"],
+        )
+        self.assertEqual([block["id"] for block in blocks], ["plan-section-1", "plan-section-2", "plan-diagram-1", "plan-section-3"])
+        self.assertNotIn("type=\"code\"", json.dumps(blocks))
+        section = blocks[1]
+        self.assertEqual(section["type"], "html")
+        self.assertEqual(section["heading_level"], 2)
+        self.assertIn("<li>CLIで本文をHTML化する。</li>", section["content"])
+        diagram = blocks[2]
+        self.assertEqual(
+            diagram,
+            {
+                "id": "plan-diagram-1",
+                "type": "diagram",
+                "heading_level": 3,
+                "title": "処理フロー",
+                "content": "flowchart TD\n  source --> html",
+                "review_required": True,
+            },
+        )
+
+    def test_build_plan_preview_model_uses_first_matching_duplicate_heading(self) -> None:
+        payload = validate_plan_preview_payload(
+            {
+                "source_text": "\n".join(
+                    [
+                        "# Duplicate",
+                        "",
+                        "## Phase",
+                        "first",
+                        "",
+                        "## Phase",
+                        "second",
+                    ]
+                ),
+                "diagrams": [{"after_heading": "Phase", "mermaid": "flowchart TD\n  a --> b"}],
+            }
+        )
+        model = build_plan_preview_model(payload, "dup")
+
+        self.assertEqual([block["id"] for block in model["blocks"]], ["plan-section-1", "plan-diagram-1", "plan-section-2"])
+        self.assertIn("first", model["blocks"][0]["content"])
+
+    def test_build_plan_preview_model_allows_diagram_after_subheading(self) -> None:
+        payload = validate_plan_preview_payload(
+            {
+                "source_text": "\n".join(
+                    [
+                        "# Plan",
+                        "",
+                        "## Parent",
+                        "intro",
+                        "",
+                        "### Child",
+                        "detail",
+                    ]
+                ),
+                "diagrams": [{"after_heading": "Child", "mermaid": "flowchart TD\n  a --> b"}],
+            }
+        )
+        model = build_plan_preview_model(payload, "sub")
+
+        self.assertEqual([block["id"] for block in model["blocks"]], ["plan-section-1", "plan-diagram-1"])
 
     def test_create_plan_preview_local_mode_returns_localhost_temp_url_and_cleans_up(self) -> None:
         result = create_plan_preview(_payload(), ttl=60, mode="local")
@@ -62,13 +112,44 @@ class PlanPreviewTest(unittest.TestCase):
             with urllib.request.urlopen(result.url, timeout=5) as response:
                 html = response.read().decode("utf-8")
             self.assertIn("Plan Preview Test", html)
-            self.assertIn("CLIを追加する", html)
-            self.assertIn("## 元の計画本文", html)
-            self.assertIn("CLIでは読み取りにくい依存関係もHTMLで補足する。", html)
+            self.assertIn("<h2>Context</h2>", html)
+            self.assertIn("<h2>実装手順</h2>", html)
+            self.assertIn("CLIで本文をHTML化する。", html)
+            self.assertNotIn("Original Plan Text", html)
         finally:
             if result.root.exists():
                 stop_plan_preview(result.root, result.pid, result.process, result.cleanup_process)
         self.assertFalse(result.root.exists())
+
+    def test_rendered_html_does_not_create_javascript_links_or_raw_html_tags(self) -> None:
+        model = build_plan_preview_model(
+            validate_plan_preview_payload(
+                {
+                    "source_text": "\n".join(
+                        [
+                            "# Safety",
+                            "",
+                            "## Links",
+                            "[bad](javascript:alert(1)) and [ok](https://example.com)",
+                            "",
+                            "<script>alert(1)</script>",
+                        ]
+                    )
+                }
+            ),
+            "safe",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_path = root / "document-model.json"
+            model_path.write_text(json.dumps(model), encoding="utf-8")
+            render_bundle(model_path, root)
+            html = (root / "index.html").read_text(encoding="utf-8")
+
+        self.assertNotIn('href="javascript:alert(1)"', html)
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", html)
+        self.assertIn('href="https://example.com"', html)
 
     def test_create_plan_preview_auto_mode_can_return_tailscale_url(self) -> None:
         seen: dict[str, object] = {}
@@ -192,6 +273,35 @@ class PlanPreviewTest(unittest.TestCase):
         self.assertIsInstance(root, Path)
         self.assertFalse(root.exists())
 
+    def test_create_plan_preview_rejects_invalid_payload_before_temp_root_creation(self) -> None:
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        before = {path for path in temp_root.glob(f"{ROOT_PREFIX}*") if path.is_dir()}
+        with self.assertRaisesRegex(PlanPreviewError, "source_text"):
+            create_plan_preview({"title": "missing source"}, ttl=60, mode="local")
+        after = {path for path in temp_root.glob(f"{ROOT_PREFIX}*") if path.is_dir()}
+        self.assertEqual(after, before)
+
+    def test_validate_plan_preview_payload_rejects_unknown_keys_and_old_aliases(self) -> None:
+        for key in ["summary", "phases", "key_changes", "flow", "sections", "test_plan", "assumptions", "visual_notes"]:
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(PlanPreviewError, "unsupported key"):
+                    validate_plan_preview_payload({"source_text": "# Plan", key: "old"})
+        for key in ["proposed_plan", "plan_text", "full_text"]:
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(PlanPreviewError, "unsupported key"):
+                    validate_plan_preview_payload({key: "# Plan"})
+
+    def test_build_plan_preview_model_rejects_missing_diagram_heading(self) -> None:
+        payload = validate_plan_preview_payload(
+            {
+                "source_text": "# Plan\n\n## Existing\nbody",
+                "diagrams": [{"after_heading": "Missing", "mermaid": "flowchart TD\n  a --> b"}],
+            }
+        )
+
+        with self.assertRaisesRegex(PlanPreviewError, "after_heading not found"):
+            build_plan_preview_model(payload, "missing")
+
     def test_read_payload_rejects_remote_assets(self) -> None:
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as tmp:
             json.dump({"title": "bad", "remote_asset_urls": ["https://example.com/a.png"]}, tmp)
@@ -219,49 +329,30 @@ class PlanPreviewTest(unittest.TestCase):
 def _payload() -> dict[str, object]:
     return {
         "title": "Plan Preview Test",
-        "summary": "Plan ModeでURLを自然に入れる。",
         "source_text": "\n".join(
             [
-                "## 元の計画本文",
+                "# Plan Preview Test",
                 "",
-                "- 実装範囲: plan-preview CLIで全文を保持する。",
-                "- 非範囲: 最終HTML成果物のrenderer flowへ流さない。",
-                "- 検証: unit testとlocal previewで本文欠落を確認する。",
-                "- 補足: CLIでは読み取りにくい依存関係もHTMLで補足する。",
+                "## Context",
+                "CLI側で `source_text` を変換する。",
+                "",
+                "## 実装手順",
+                "",
+                "- CLIで本文をHTML化する。",
+                "- 図は指定章の直後へ挿入する。",
+                "",
+                "## 検証",
+                "",
+                "1. unit test",
+                "2. local preview",
             ]
         ),
-        "phases": [
-            {"title": "Phase 1", "detail": "CLIと一時previewを作る"},
-            {"title": "Phase 2", "detail": "skill metadataを配布する"},
-        ],
-        "key_changes": [
-            "CLIを追加する",
-            "一時ディレクトリをTTLで消す",
-        ],
-        "sections": [
+        "diagrams": [
             {
-                "title": "補助表示",
-                "content": "CLI本文だけでは表現しにくい詳細を、HTML上では補助情報として増やす。",
-                "items": [
-                    "元本文の情報は削らない",
-                    "構造化ビューは補助として使う",
-                ],
+                "after_heading": "実装手順",
+                "title": "処理フロー",
+                "mermaid": "flowchart TD\n  source --> html",
             }
-        ],
-        "flow": [
-            {"from": "Plan Mode", "to": "CLI", "label": "payload"},
-            {"from": "CLI", "to": "HTML preview", "label": "localhost"},
-        ],
-        "test_plan": [
-            "unit test",
-            "CLI疎通確認",
-        ],
-        "assumptions": [
-            "初期版ではhookを追加しない",
-        ],
-        "visual_notes": [
-            "全文ブロックを先に置く",
-            "図とリストで依存関係を追加表示する",
         ],
     }
 

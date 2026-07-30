@@ -153,6 +153,7 @@ def preview(args: argparse.Namespace) -> int:
             owner_pid=args.owner_pid,
             idle_timeout=args.idle_timeout,
             owner_grace=args.owner_grace,
+            port=args.port,
         )
     except PreviewConfigurationError as exc:
         return _fail(exc, root=args.root, mode=args.mode)
@@ -363,6 +364,14 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
                 kwargs={"type": float, "default": DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS},
             ),
             _CommandArg("--owner-grace", kwargs={"type": float, "default": 300.0}),
+            _CommandArg(
+                "--port",
+                kwargs={
+                    "type": int,
+                    "default": 0,
+                    "help": "Fixed listen port. 0 lets the OS choose a free port.",
+                },
+            ),
         ),
         preview,
     ),

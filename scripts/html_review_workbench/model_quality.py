@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.html_review_workbench.diagram_planner import diagram_source
+from scripts.html_review_workbench.palette import validate_palette
 
 
 DEPRECATED_RENDERER_TYPES = frozenset({"section", "text", "table"})
@@ -46,6 +47,7 @@ def check_model_quality(model_path: Path) -> ModelQualityResult:
     metadata = model.get("metadata")
     if isinstance(metadata, dict) and metadata.get("planner") == "source-capture-draft":
         errors.append("source-capture draft is not a final HTML document model")
+    errors.extend(validate_palette(metadata))
 
     blocks = model.get("blocks")
     if not isinstance(blocks, list) or not blocks:

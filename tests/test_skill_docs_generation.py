@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FRAGMENTS = (
     "md-file-prohibition",
+    "html-style-classes",
+    "html-design-guidance",
     "repo-root-resolution",
     "preview-owner-pid-note",
     "tailscale-sandbox-fallback",
@@ -109,14 +111,10 @@ class SkillDocsGenerationTest(unittest.TestCase):
         self.assertLess(reviewable.index("cli render"), reviewable.index("cli validate"))
         self.assertLess(reviewable.index("cli validate"), reviewable.index("cli preview"))
 
-    def test_shared_marker_free_diff_matches_baseline(self) -> None:
-        for path in SKILL_PATHS:
-            relative = path.relative_to(ROOT).as_posix()
-            baseline = subprocess.check_output(
-                ["git", "-C", str(ROOT), "show", f"HEAD:{relative}"],
-            ).decode("utf-8")
-            current = path.read_text(encoding="utf-8")
-            self.assertEqual(_without_shared_marker_lines(baseline), _without_shared_marker_lines(current))
+    # 移行検査 test_shared_marker_free_diff_matches_baseline は削除した。
+    # HEAD と working tree の一致を前提にするため、SKILL.md への正当な変更でも
+    # commit まで必ず失敗する。drift 防止は test_generator_check_detects_no_drift /
+    # test_generator_rewrite_is_idempotent / test_generator_preserves_non_shared_regions で担保する。
 
 
 def _without_shared_regions(text: str) -> str:
@@ -135,14 +133,6 @@ def _without_shared_regions(text: str) -> str:
         if not in_shared:
             output.append(line)
     return "".join(output)
-
-
-def _without_shared_marker_lines(text: str) -> str:
-    return "".join(
-        line
-        for line in text.splitlines(keepends=True)
-        if not line.startswith("<!-- BEGIN SHARED: ") and not line.startswith("<!-- END SHARED: ")
-    )
 
 
 if __name__ == "__main__":

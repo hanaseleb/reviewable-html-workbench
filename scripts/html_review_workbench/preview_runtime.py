@@ -21,6 +21,7 @@ DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60
 
 class ReviewPreviewHandler(SimpleHTTPRequestHandler):
     comments_route = "/annotations/comments.json"
+    checklist_route = "/annotations/checklist-state.json"
     events_route = "/events"
     _last_activity: float = 0.0
     _lock = threading.Lock()
@@ -60,6 +61,9 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         self.touch_activity()
+        if self._path() == self.checklist_route:
+            self._handle_checklist_put()
+            return
         if self._path() != self.comments_route:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -87,6 +91,28 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         data = {k: v for k, v in body.items() if k != "type"}
         self.event_bus.publish(event_type, data)
         self._send_json({"ok": True, "event_type": event_type})
+
+    def _handle_checklist_put(self) -> None:
+        """作業チェックリストの状態を保存する。
+
+        読み出しは静的配信をそのまま使うため、ここでは書き込みだけを扱う。
+        端末をまたいで同じ状態を見せることが目的で、同時更新は後勝ちとする。
+        """
+        try:
+            payload = json.loads(self.rfile.read(_content_length(self)).decode("utf-8"))
+        except json.JSONDecodeError as exc:
+            self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        if not isinstance(payload, dict) or not isinstance(payload.get("state"), dict):
+            self._send_json(
+                {"ok": False, "error": "checklist payload must contain a state object"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            return
+        target = self.root / "annotations" / "checklist-state.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._send_json({"ok": True, "path": "annotations/checklist-state.json"})
 
     def _handle_sse(self) -> None:
         self.send_response(HTTPStatus.OK)

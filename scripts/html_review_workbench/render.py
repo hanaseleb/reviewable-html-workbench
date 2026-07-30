@@ -20,6 +20,7 @@ from scripts.html_review_workbench.common import (
     write_json,
 )
 from scripts.html_review_workbench.diagram_planner import PlannedDiagram, plan_diagrams, write_diagram_sources
+from scripts.html_review_workbench.palette import palette_style_block, validate_palette
 from scripts.html_review_workbench.render_blocks import _render_block
 
 
@@ -29,6 +30,7 @@ STYLE_PATH = ROOT / "templates" / "style.css"
 COMMENTS_JS_PATH = ROOT / "templates" / "review-comments.js"
 MERMAID_JS_PATH = ROOT / "templates" / "assets" / "mermaid.min.js"
 DIAGRAM_ZOOM_JS_PATH = ROOT / "templates" / "assets" / "diagram-zoom.js"
+TASK_CHECKLIST_JS_PATH = ROOT / "templates" / "assets" / "task-checklist.js"
 
 
 def render_bundle(model_path: Path, output_dir: Path) -> Path:
@@ -54,6 +56,9 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
         },
     )
     metadata = model.get("metadata") if isinstance(model.get("metadata"), dict) else {}
+    palette_errors = validate_palette(metadata)
+    if palette_errors:
+        raise ValueError("palette validation failed: " + "; ".join(palette_errors))
     doc_lang = str(metadata.get("lang", "ja"))
     html = _render_template(
         {
@@ -68,6 +73,7 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
             "summary": _render_optional_summary(model.get("summary"), doc_lang),
             "generated_at": escape(model["generated_at"]),
             "asset_version": escape(rendered_at, quote=True),
+            "palette_style": palette_style_block(metadata),
             "mermaid_head": _render_mermaid_head(rendered_at) if has_rendered_mermaid else "",
             "body": body_html,
             "toc": _render_toc(model["blocks"]),
@@ -80,11 +86,13 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
     shutil.copyfile(PUBLISH_OVERRIDES_CSS_PATH, assets_dir / "publish-overrides.css")
     shutil.copyfile(PUBLISH_EXPORT_JS_PATH, assets_dir / "publish-export.js")
     shutil.copyfile(COMMENTS_JS_PATH, assets_dir / "review-comments.js")
+    shutil.copyfile(TASK_CHECKLIST_JS_PATH, assets_dir / "task-checklist.js")
     asset_outputs = [
         "assets/style.css",
         "assets/publish-overrides.css",
         "assets/publish-export.js",
         "assets/review-comments.js",
+        "assets/task-checklist.js",
     ]
     if has_rendered_mermaid:
         if not MERMAID_JS_PATH.is_file():

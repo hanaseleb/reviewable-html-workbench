@@ -30,6 +30,246 @@
     });
   }
 
+  function diagramFileStem(sourceSvg) {
+    // 図の見出し (直近の review-block の title) があればファイル名に使う。無ければ id か連番。
+    const block = sourceSvg.closest("[data-review-block]");
+    const heading = block ? block.querySelector("h2, h3, h4") : null;
+    const raw = (heading && heading.textContent ? heading.textContent : "").trim();
+    const cleaned = raw.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+    if (cleaned) {
+      return "diagram-" + cleaned;
+    }
+    const all = Array.from(document.querySelectorAll(".diagram-wrap svg"));
+    const index = all.indexOf(sourceSvg);
+    return "diagram-" + (index >= 0 ? index + 1 : Date.now());
+  }
+
+  function serializeSvg(sourceSvg, options) {
+    const clone = sourceSvg.cloneNode(true);
+    if (!clone.getAttribute("xmlns")) {
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    const box = sourceSvg.viewBox && sourceSvg.viewBox.baseVal;
+    const rect = sourceSvg.getBoundingClientRect();
+    const width = (box && box.width) || rect.width || 800;
+    const height = (box && box.height) || rect.height || 600;
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+    if (options && options.flattenLabels) {
+      flattenForeignObjects(sourceSvg, clone);
+    }
+    inlineStyles(clone);
+    return { xml: new XMLSerializer().serializeToString(clone), width, height };
+  }
+
+  /**
+   * Mermaid のノードラベルを SVG <text> へ置き換える。
+   *
+   * Mermaid v11 は htmlLabels 既定 true でラベルを <foreignObject> の HTML として描く。
+   * data URI の SVG を <img> 経由で canvas に描くと foreignObject の中身は描画されず、
+   * 文字だけが消えた PNG が保存される (無言の失敗)。そのため PNG 化の前に
+   * foreignObject を、同じ位置・同じ行構成の <text>/<tspan> に置き換える。
+   * 置換に失敗した foreignObject が残った場合は呼び出し側が SVG fallback へ落とす。
+   */
+  function flattenForeignObjects(sourceSvg, clone) {
+    const originals = sourceSvg.querySelectorAll("foreignObject");
+    const clones = clone.querySelectorAll("foreignObject");
+    for (let i = 0; i < clones.length; i += 1) {
+      const target = clones[i];
+      const origin = originals[i];
+      const lines = extractLabelLines(origin || target);
+      if (lines.length === 0) {
+        target.remove();
+        continue;
+      }
+      const styleSource = origin ? origin.querySelector("span, p, div") : null;
+      const computed = styleSource ? getComputedStyle(styleSource) : null;
+      const fontSize = computed ? parseFloat(computed.fontSize) || 14 : 14;
+      const fontFamily = computed ? computed.fontFamily : "sans-serif";
+      const fill = computed ? computed.color : "#333";
+      const width = parseFloat(target.getAttribute("width")) || 0;
+      const height = parseFloat(target.getAttribute("height")) || 0;
+      const lineHeight = fontSize * 1.2;
+      // edge ラベルは元々 HTML 側の背景色で線を隠している。text だけに置き換えると
+      // 線が文字を横切って読めなくなるため、同じ位置へ背景矩形を復元する。
+      const labelBackground = origin ? resolveLabelBackground(origin) : "";
+      if (labelBackground) {
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", "0");
+        rect.setAttribute("y", "0");
+        rect.setAttribute("width", String(width));
+        rect.setAttribute("height", String(height));
+        rect.setAttribute("fill", labelBackground);
+        target.parentNode.insertBefore(rect, target);
+        // foreignObject と同じ transform 配下に置くため、rect にも同じ属性を写す
+        const transform = target.getAttribute("transform");
+        if (transform) {
+          rect.setAttribute("transform", transform);
+        }
+        ["x", "y"].forEach((name) => {
+          const value = target.getAttribute(name);
+          if (value) {
+            rect.setAttribute(name, value);
+          }
+        });
+      }
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", String(width / 2));
+      // foreignObject の縦中央に行全体を収める
+      const firstBaseline = (height - lineHeight * (lines.length - 1)) / 2 + fontSize * 0.35;
+      text.setAttribute("y", String(firstBaseline));
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("font-size", String(fontSize));
+      text.setAttribute("font-family", fontFamily);
+      text.setAttribute("fill", fill);
+      lines.forEach((line, index) => {
+        const tspan = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+        tspan.setAttribute("x", String(width / 2));
+        if (index > 0) {
+          tspan.setAttribute("dy", String(lineHeight));
+        }
+        tspan.textContent = line;
+        text.appendChild(tspan);
+      });
+      target.replaceWith(text);
+    }
+  }
+
+  /**
+   * ラベルの実効背景色を求める。
+   *
+   * Mermaid は edge ラベルを `.edgeLabel` の背景色で塗って線を隠す。透明な祖先を
+   * 遡って最初の不透明色を採り、見つからない場合は空文字を返す (矩形を作らない)。
+   * ノードラベルは親の shape が既に塗られているため、透明のまま矩形不要になる。
+   */
+  function resolveLabelBackground(foreignObject) {
+    let node = foreignObject.querySelector("span, div, p") || foreignObject;
+    let depth = 0;
+    while (node && depth < 4) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color && color !== "transparent" && !/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\s*\)/.test(color)) {
+        return color;
+      }
+      node = node.parentElement;
+      depth += 1;
+    }
+    return "";
+  }
+
+  function extractLabelLines(foreignObject) {
+    // <p> / <div> / <br> のいずれで改行されていても 1 行ずつ取り出す
+    const blocks = foreignObject.querySelectorAll("p, div.label > span, br");
+    const lines = [];
+    if (blocks.length > 0) {
+      const html = foreignObject.innerHTML.replace(/<br\s*\/?>/gi, "\n");
+      const holder = document.createElement("div");
+      holder.innerHTML = html;
+      holder.querySelectorAll("p, div").forEach((node) => {
+        node.insertAdjacentText("afterend", "\n");
+      });
+      holder.textContent.split("\n").forEach((part) => {
+        const trimmed = part.trim();
+        if (trimmed) {
+          lines.push(trimmed);
+        }
+      });
+    }
+    if (lines.length === 0) {
+      const raw = (foreignObject.textContent || "").trim();
+      if (raw) {
+        lines.push(raw);
+      }
+    }
+    return lines;
+  }
+
+  /**
+   * 外部 stylesheet に依存している見た目を属性へ写す。
+   *
+   * 直列化した SVG は単独ファイルとして読まれるため、bundle の style.css は効かない。
+   * Mermaid が付ける stroke / fill は要素側の style 属性にあるので、
+   * ここでは stylesheet 側で決まる text 色だけを補う。
+   */
+  function inlineStyles(clone) {
+    clone.querySelectorAll("text").forEach((node) => {
+      if (!node.getAttribute("fill") && !(node.style && node.style.fill)) {
+        node.setAttribute("fill", "#333");
+      }
+    });
+  }
+
+  function triggerDownload(href, filename) {
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function downloadSvgFallback(xml, stem) {
+    const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    triggerDownload(url, stem + ".svg");
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function downloadDiagram(sourceSvg) {
+    // PNG (2x) を第一候補にする。ラベルは <text> へ平坦化してから描くので
+    // foreignObject 由来の文字落ちは起きない。それでも描画・変換に失敗した場合は
+    // 黙らず SVG ダウンロードへ落とす。
+    const stem = diagramFileStem(sourceSvg);
+    const flattened = serializeSvg(sourceSvg, { flattenLabels: true });
+    // 平坦化しきれない foreignObject が残っていたら PNG 化を試さない (文字が落ちるため)
+    if (/<foreignObject/i.test(flattened.xml)) {
+      downloadSvgFallback(serializeSvg(sourceSvg).xml, stem);
+      return;
+    }
+    const { xml, width, height } = flattened;
+    const svgUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const scale = 2;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const ctx = canvas.getContext("2d");
+        // 透過 PNG は dark 背景で読めなくなるため、拡大表示と同じ地色を敷く
+        ctx.fillStyle = overlayBackgroundColor();
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            downloadSvgFallback(xml, stem);
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          triggerDownload(url, stem + ".png");
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }, "image/png");
+      } catch (error) {
+        downloadSvgFallback(xml, stem);
+      }
+    };
+    image.onerror = () => downloadSvgFallback(xml, stem);
+    image.src = svgUrl;
+  }
+
+  function overlayBackgroundColor() {
+    // overlay が閉じている / CSS 変数が未解決の場合に transparent を敷かないよう既定へ倒す
+    const overlay = document.querySelector(".diagram-zoom-overlay");
+    const fallback = "#1c1f24";
+    if (!overlay) {
+      return fallback;
+    }
+    const color = getComputedStyle(overlay).backgroundColor;
+    if (!color || color === "transparent" || /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(color)) {
+      return fallback;
+    }
+    return color;
+  }
+
   function openZoomOverlay(sourceSvg, triggerButton) {
     const existing = document.querySelector(".diagram-zoom-overlay");
     if (existing && typeof existing.closeDiagramZoom === "function") {
@@ -70,6 +310,7 @@
       '<button type="button" data-zoom="in" aria-label="Zoom in">+</button>',
       '<button type="button" data-zoom="out" aria-label="Zoom out">-</button>',
       '<button type="button" data-zoom="reset" aria-label="Reset zoom">reset</button>',
+      '<button type="button" data-zoom="download" aria-label="Download image">save</button>',
       '<button type="button" data-zoom="close" aria-label="Close">x</button>',
     ].join("");
 
@@ -198,6 +439,8 @@
         : false;
       if (action === "close") {
         closeOverlay();
+      } else if (action === "download") {
+        downloadDiagram(sourceSvg);
       } else if (action === "in") {
         const rect = viewport.getBoundingClientRect();
         zoomAt(scale * ZOOM_STEP, rect.width / 2, rect.height / 2);

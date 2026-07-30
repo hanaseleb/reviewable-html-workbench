@@ -8,6 +8,7 @@ from pathlib import Path
 from scripts.html_review_workbench.render import render_bundle
 
 DIAGRAM_ZOOM_JS = Path(__file__).resolve().parents[1] / "templates" / "assets" / "diagram-zoom.js"
+STYLE_CSS = Path(__file__).resolve().parents[1] / "templates" / "style.css"
 
 
 def _diagram_model() -> dict[str, object]:
@@ -141,6 +142,76 @@ class RenderDiagramZoomTest(unittest.TestCase):
         self.assertIn("suppressNextClick = event.target !== viewport && event.target !== overlay", script)
         self.assertIn("panBy(event.deltaX, event.deltaY)", script)
         self.assertIn("if (event.ctrlKey || event.metaKey)", script)
+
+    def test_diagram_zoom_overlay_background_is_opaque(self) -> None:
+        """拡大表示の背景に半透明トークンを使わない (背後の本文が透けるため)。"""
+        css = STYLE_CSS.read_text(encoding="utf-8")
+        start = css.index(".diagram-zoom-overlay {")
+        overlay_rule = css[start : css.index("}", start)]
+        self.assertIn("background: var(--surface-dark)", overlay_rule)
+        self.assertNotIn("background: var(--overlay-strong)", overlay_rule)
+
+    def test_diagram_zoom_toolbar_has_download_button(self) -> None:
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn('data-zoom="download"', script)
+        self.assertIn("downloadDiagram(sourceSvg)", script)
+
+    def test_diagram_download_renders_png_with_svg_fallback(self) -> None:
+        """PNG (2x) を第一候補にし、canvas 失敗時は SVG ダウンロードへ fallback する。"""
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn("new XMLSerializer().serializeToString", script)
+        self.assertIn('canvas.toBlob', script)
+        self.assertIn("const scale = 2;", script)
+        self.assertIn("downloadSvgFallback(xml, stem)", script)
+        self.assertIn("image.onerror = () => downloadSvgFallback(xml, stem)", script)
+        # download 属性で保存する (外部送信しない)
+        self.assertIn('link.download = filename', script)
+        self.assertNotIn("fetch(", script)
+        self.assertNotIn("XMLHttpRequest", script)
+
+    def test_diagram_download_flattens_foreign_object_labels(self) -> None:
+        """Mermaid の foreignObject ラベルを <text> へ平坦化してから PNG 化する。
+
+        Mermaid v11 の getEffectiveHtmlLabels は既定 true (mermaid.min.js 実測) で
+        flowchart のラベルを foreignObject の HTML として描く。data URI の SVG を
+        canvas に描くと中身が落ちて文字なし PNG になるため、事前に置き換える。
+        """
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn("flattenForeignObjects(sourceSvg, clone)", script)
+        self.assertIn('createElementNS("http://www.w3.org/2000/svg", "text")', script)
+        self.assertIn('createElementNS("http://www.w3.org/2000/svg", "tspan")', script)
+        self.assertIn("flattenLabels: true", script)
+
+    def test_diagram_download_refuses_png_when_foreign_object_remains(self) -> None:
+        """平坦化しきれなかった場合は PNG を作らず SVG へ落とす (無言の文字落ちを防ぐ)。"""
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn("if (/<foreignObject/i.test(flattened.xml))", script)
+
+    def test_diagram_download_restores_label_background_rect(self) -> None:
+        """edge ラベルの背景を矩形で復元する (線が文字を横切るのを防ぐ)。
+
+        verifier 実測の欠陥: text だけへ置換した PNG では edge 線が
+        「style 注入」等のラベル文字を横切っていた。
+        """
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn("function resolveLabelBackground(", script)
+        self.assertIn('createElementNS("http://www.w3.org/2000/svg", "rect")', script)
+        self.assertIn("target.parentNode.insertBefore(rect, target)", script)
+        # 透明なラベル (ノード内側) では矩形を作らない
+        self.assertIn('return ""', script)
+
+    def test_diagram_download_background_falls_back_when_transparent(self) -> None:
+        """overlay が閉じている / 変数未解決でも透明背景の PNG を作らない。"""
+        script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
+
+        self.assertIn("function overlayBackgroundColor()", script)
+        self.assertIn('const fallback = "#1c1f24"', script)
+        self.assertIn('color === "transparent"', script)
 
 
 if __name__ == "__main__":

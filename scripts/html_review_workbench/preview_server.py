@@ -134,7 +134,13 @@ def start_preview(
     owner_pid: int | None = None,
     idle_timeout: float = DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS,
     owner_grace: float = 300.0,
+    port: int = 0,
 ) -> PreviewSession:
+    """preview server を起動する。
+
+    port に 0 を渡すと OS が空き port を割り当てる。URL を起動ごとに変えたくない
+    場合 (ブラウザ側の保存領域は origin 単位のため) は明示的な port を渡す。
+    """
     root = root.resolve()
     if not root.is_dir():
         raise PreviewConfigurationError(f"preview root does not exist: {root}")
@@ -149,7 +155,7 @@ def start_preview(
         "-m",
         "scripts.html_review_workbench.preview_server",
         "--serve",
-        "0",
+        str(port),
         "--bind",
         bind,
         "--owner-session",

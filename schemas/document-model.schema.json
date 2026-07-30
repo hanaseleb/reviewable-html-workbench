@@ -30,7 +30,32 @@
       "minLength": 1
     },
     "metadata": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "palette": {
+          "type": "object",
+          "description": "主題連動 accent の上書き。brand / brand_soft だけを light / dark 別に受ける。schema_validation.py は $ref 非対応のため inline で書く。",
+          "properties": {
+            "light": {
+              "type": "object",
+              "properties": {
+                "brand": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "brand_soft": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+              },
+              "additionalProperties": false
+            },
+            "dark": {
+              "type": "object",
+              "properties": {
+                "brand": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+                "brand_soft": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      }
     },
     "review_settings": {
       "type": "object",

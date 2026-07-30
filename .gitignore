@@ -24,9 +24,14 @@ Thumbs.db
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+
+# agent-bridge / tmux-bridge の session marker (端末固有・揮発性)
+.meta
 
 # Generated artifacts
 output/
 tmp/
+test-results/
 .codegraph/
 docs/goals/*/.goalbuddy-board/

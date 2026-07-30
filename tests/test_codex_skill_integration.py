@@ -194,10 +194,12 @@ class CodexSkillIntegrationTest(unittest.TestCase):
         self.assertIn("`visual-html-renderer` の `document-model.json`", plan_preview)
         self.assertIn("During Plan Mode, use this skill for plan preview requests instead of `visual-html-renderer`", plan_preview)
         self.assertIn("計画全文を `source_text` にそのまま入れる", plan_preview)
-        self.assertIn("全文の代替ではなくHTML上の補助ビュー", plan_preview)
-        self.assertIn("preview用に情報を削らない", plan_preview)
-        self.assertIn("HTML上では元の計画本文を全文表示", plan_preview)
-        self.assertIn("The HTML preview must show the original plan text in full", plan_preview)
+        self.assertIn("要約・並べ替え・削除・言い換えは禁止", plan_preview)
+        self.assertIn("受理されるトップレベル key は `title` / `source_text` / `diagrams` だけ", plan_preview)
+        self.assertIn("HTMLは原文と同じ章構成・同じ内容で表示", plan_preview)
+        self.assertIn("HTMLに追加されるのは、agentが `diagrams` で指定した図だけ", plan_preview)
+        self.assertIn("The accepted top-level keys are only `title`, `source_text`, and `diagrams`", plan_preview)
+        self.assertIn("The HTML preview must show the same section structure and same content as the original plan", plan_preview)
         self.assertNotIn("Tailscale / 外部公開", plan_preview)
 
     def test_same_fixture_keeps_artifact_structure_across_skill_workflows(self) -> None:

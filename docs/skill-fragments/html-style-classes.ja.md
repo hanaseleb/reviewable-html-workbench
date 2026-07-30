@@ -1,0 +1,23 @@
+## html block で使える表現部品
+
+同梱の `style.css` には、`html` block 内でそのまま使える表現 class が実装済みである。比較・評価・推奨・決定がある内容では、素の `<table>` / `<p>` で終えず、該当する部品を選ぶ。
+
+| 用途 | class | 書き方 |
+|---|---|---|
+| 表番号 + 表題 | `table-wrap` / `table-cap` / `t-no` / `t-title` / `table-scroll` | `<figure class="table-wrap"><figcaption class="table-cap"><span class="t-no">表 1</span><span class="t-title">3 案の比較</span></figcaption><div class="table-scroll"><table>…</table></div></figure>` |
+| 表ヘッダの補助説明 | `axis-sub` | `<th scope="col">実装量<span class="axis-sub">行数の目安</span></th>` |
+| 5 段階評価 | `rate` + `good`/`mid`/`low` + `r1`〜`r5` + `pips` / `pip` | `<span class="rate good r4"><span class="pips"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span>容易</span>` (pip は常に 5 個。`rN` が塗る数、`good`/`mid`/`low` が色) |
+| 可否・対応状況 | `tag-yes` / `tag-no` / `tag-cell-note` | `<td><span class="tag-yes">対応</span><span class="tag-cell-note">v2.0 以降</span></td>` |
+| 桁揃え数値 | `num` | `<td><span class="num">1,024</span></td>` (表中の数値列に使う) |
+| 推奨パネル | `reco` / `reco-tag` | `<div class="reco"><span class="reco-tag">推奨</span><p>案 B を採る。理由は…</p></div>` |
+| 決定の枠囲み | `decision-panel` | `<div class="decision-panel"><p>…</p></div>` |
+| 導入段落の強調 | `lead` / `lead-note` | `<p class="lead">この章では…</p>` (章冒頭の導入段落に使う) |
+| コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
+
+使い分けの基準:
+
+- 比較表には `table-wrap` + `table-cap` で番号と表題を付ける。本文からの参照は「表 1」で行う。
+- 評価軸 (容易さ・成熟度・リスク等) は文字だけでなく `rate` の点表示でも符号化する。
+- 推奨・決定は本文の段落に埋めず、`reco` または `decision-panel` で独立させる。
+- これらは class 指定だけで効く。`style` 属性の直書きで同等の見た目を再実装しない。
+- 色は `metadata.palette` の `brand` / `brand_soft` だけ主題に合わせて上書きできる。コントラスト比は `check-model` / `render` / `validate` が WCAG 4.5:1 で検査し、不足すると error で止まる (brand は最も薄い地色との比、brand_soft は本文色との比、両方指定時は 2 色の相互比も見る)。

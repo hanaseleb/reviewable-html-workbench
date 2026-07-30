@@ -16,6 +16,7 @@ COMMENTS_SCHEMA_PATH = REPO_ROOT / "schemas" / "comments.schema.json"
 MERMAID_INIT_JS = "mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})"
 PUBLISH_EXPORT_JS_PATH = REPO_ROOT / "templates" / "assets" / "publish-export.js"
 PUBLISH_OVERRIDES_CSS_PATH = REPO_ROOT / "templates" / "assets" / "publish-overrides.css"
+TASK_CHECKLIST_JS_PATH = REPO_ROOT / "templates" / "assets" / "task-checklist.js"
 
 
 def now_iso() -> str:

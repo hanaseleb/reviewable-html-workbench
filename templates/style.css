@@ -50,9 +50,13 @@
   --line-2:      #d6d1c5;
   --line-3:      #c4bdae;
 
-  /* Structural accent (links, primary) */
+  /* Structural accent (links, rules, markers). metadata.palette で上書きできる */
   --brand:       #2f6093;
   --brand-soft:  #e8eff7;
+  /* 白文字を載せる操作要素 (primary button 等) の地色。
+     --brand とは別に持つ。palette で --brand を明るい色へ振ると白文字が読めなくなるため、
+     ここは上書き対象から外して可読性を固定する。既定値は --brand と同値 */
+  --control-primary: #2f6093;
 
   /* Review-state hues (distinct, shared L/C) */
   --open:        #2f6fb0;  --open-bg:    #e9f1f9;  --open-line:  #bcd6ee;
@@ -129,6 +133,7 @@
 
   --brand:       #6ea4dc;
   --brand-soft:  #1f2d3c;
+  --control-primary: #6ea4dc;
 
   --open:        #6ea4dc; --open-bg:    #1c2c3b; --open-line:  #355472;
   --reply:       #d6a85a; --reply-bg:   #352c18; --reply-line: #604c25;
@@ -283,7 +288,7 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
 /* author/agent line */
 .byline { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); font-size: var(--fs-small); color: var(--ink-2); flex-wrap: wrap; }
 .agent-badge { display: inline-flex; align-items: center; gap: 7px; background: var(--paper-2); border: 1px solid var(--line-2); border-radius: var(--r-pill); padding: 3px 11px 3px 4px; font-weight: 550; }
-.agent-avatar { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(140deg, var(--brand), var(--agent-accent)); color: var(--ink-inverse); display: grid; place-items: center; font-size: 10px; font-weight: 700; font-family: var(--font-mono); }
+.agent-avatar { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(140deg, var(--control-primary), var(--agent-accent)); color: var(--ink-inverse); display: grid; place-items: center; font-size: 10px; font-weight: 700; font-family: var(--font-mono); }
 .byline .muted { color: var(--ink-3); }
 
 /* ---------- 6. METADATA GRID ------------------------------ */
@@ -654,7 +659,8 @@ body.zoom-open { overflow: hidden; }
 .diagram-zoom-overlay {
   position: fixed; inset: 0; z-index: 9999; display: none;
   align-items: stretch; justify-content: stretch;
-  background: var(--overlay-strong); color: var(--ink-on-overlay);
+  /* 不透明にする。半透明 (--overlay-strong) だと背後の本文が透けて図が読みにくい */
+  background: var(--surface-dark); color: var(--ink-on-overlay);
 }
 .diagram-zoom-overlay.is-open { display: flex; }
 .diagram-zoom-overlay .zoom-viewport {
@@ -806,7 +812,7 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
   background: var(--overlay-chip); color: inherit; font: inherit;
   cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
 }
-.pub-exit .pe-btn.primary { background: var(--brand); color: var(--ink-inverse); }
+.pub-exit .pe-btn.primary { background: var(--control-primary); color: var(--ink-inverse); }
 .pub-exit .pe-btn:hover { filter: brightness(.94); }
 .pub-exit .pe-btn .icon { width: 14px; height: 14px; }
 
@@ -884,7 +890,7 @@ textarea.cmt-input, input.cmt-input {
   background: var(--paper-2); color: var(--ink); line-height: 1; white-space: nowrap;
 }
 .btn:hover { border-color: var(--line-3); }
-.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--ink-inverse); }
+.btn.primary { background: var(--control-primary); border-color: var(--control-primary); color: var(--ink-inverse); }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--ink-2); padding: 7px 8px; }
 .btn.ghost:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
@@ -908,7 +914,7 @@ textarea.cmt-input, input.cmt-input {
 .m-chev { transition: transform .15s; color: var(--ink-3); }
 .m-thread.open-state .m-chev { transform: rotate(90deg); }
 .m-fab {
-  position: absolute; right: 14px; bottom: 14px; z-index: 25; background: var(--brand); color: var(--ink-inverse);
+  position: absolute; right: 14px; bottom: 14px; z-index: 25; background: var(--control-primary); color: var(--ink-inverse);
   border-radius: var(--r-pill); padding: 10px 16px; font-size: 12px; font-weight: 650; box-shadow: var(--sh-2);
   display: inline-flex; align-items: center; gap: 7px;
 }
@@ -1151,3 +1157,81 @@ textarea.cmt-input, input.cmt-input {
 .cmt.new-thread-enter {
   animation: new-reply-pulse .6s ease 1;
 }
+
+/* ── 作業チェックリスト ───────────────────────────────── */
+.checklist-panel {
+  margin: 0 0 var(--block-gap);
+  padding: var(--pad-card);
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+}
+.cl-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+.cl-title { font-size: var(--fs-meta); font-weight: 650; color: var(--ink); }
+.cl-count {
+  font-size: var(--fs-meta); font-weight: 650; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.checklist-panel[data-complete="true"] .cl-count { color: var(--resolved); }
+.cl-bar {
+  height: 6px; border-radius: var(--r-pill);
+  background: var(--line-1); overflow: hidden;
+}
+.cl-fill {
+  height: 100%; width: 0;
+  background: var(--brand); border-radius: var(--r-pill);
+  transition: width .25s ease;
+}
+.checklist-panel[data-complete="true"] .cl-fill { background: var(--resolved); }
+.cl-sections {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2px 16px; margin-top: 12px;
+}
+.cl-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; padding: 4px 6px; border-radius: var(--r-sm);
+  font-size: var(--fs-small); cursor: pointer;
+}
+.cl-row:hover { background: var(--line-1); }
+.cl-row-name {
+  color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-row-count {
+  color: var(--ink-2); font-variant-numeric: tabular-nums; flex: none;
+}
+.cl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cl-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--r-pill);
+  border: 1px solid var(--line-2); background: var(--paper);
+  color: var(--ink); font: inherit; font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.cl-btn:hover { border-color: var(--line-3); }
+.cl-btn.danger[data-armed="true"] {
+  border-color: var(--reply-line); background: var(--reply-bg); color: var(--reply);
+}
+.cl-notice {
+  margin: 10px 0 0; font-size: var(--fs-caption); color: var(--ink-2);
+}
+.cl-badge {
+  display: inline-block; margin-left: 8px;
+  padding: 1px 8px; border-radius: var(--r-pill);
+  border: 1px solid var(--line-2); background: var(--paper-2);
+  font-size: var(--fs-caption); font-weight: 550; color: var(--ink-2);
+  font-variant-numeric: tabular-nums; vertical-align: middle;
+}
+.cl-badge[data-complete="true"] {
+  border-color: var(--resolved-line); background: var(--resolved-bg); color: var(--resolved);
+}
+input[type=checkbox][data-task-check] {
+  width: 15px; height: 15px; margin: 0; vertical-align: middle;
+  accent-color: var(--brand); cursor: pointer;
+}
+tr.is-checked > td { color: var(--ink-faint); }
+tr.is-checked > td:first-child { color: var(--ink-2); }
+li.is-checked { color: var(--ink-faint); }
