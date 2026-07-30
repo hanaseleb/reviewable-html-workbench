@@ -41,6 +41,9 @@ class RendererBundleTest(unittest.TestCase):
             self.assertIn("max-width: none", css)
             self.assertIn(".table-scroll { overflow-x: auto; }", css)
             self.assertIn("table.cmp { border-collapse: separate; border-spacing: 0; width: 100%;", css)
+            # 比較表の sticky 軸列と推奨列ハイライトは SKILL.md 側で解禁済み (test_skill_docs_generation)
+            self.assertIn("table.cmp th.axis, table.cmp td.axis", css)
+            self.assertIn("table.cmp col.pick", css)
             self.assertIn("overflow-wrap: anywhere", css)
 
             manifest = json.loads((output_dir / "renderer-manifest.json").read_text(encoding="utf-8"))

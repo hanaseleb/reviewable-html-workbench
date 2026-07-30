@@ -82,9 +82,41 @@ Follow the language of the latest user request for progress updates, final respo
 | 導入段落の強調 | `lead` / `lead-note` | `<p class="lead">この章では…</p>` (章冒頭の導入段落に使う) |
 | コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
 
+### 多軸の比較表 (`table.cmp`)
+
+軸が 3 つ以上ある比較、または行数が多くて横スクロールが要る比較には `<table class="cmp">` を使う。通常の `<table>` と違い、ヘッダ行と最初の列 (比較軸) がスクロール中も固定され、推奨案の列を緑で浮かせられる。
+
+| class | 効果 |
+|---|---|
+| `cmp` (table に付ける) | 比較表本体。`thead th` が sticky ヘッダになる。最小幅 720px のため `table-scroll` の中に入れる |
+| `axis` (最初の列の `th` / `td` に付ける) | 比較軸の列が横スクロール中も左端に残る |
+| `pick` (`<col>` / `th` / `td` に付ける) | 推奨する案の列を緑系で強調する。`<colgroup><col><col class="pick"></colgroup>` で列単位、または個別セルに付ける |
+
+```html
+<figure class="table-wrap">
+  <figcaption class="table-cap"><span class="t-no">表 1</span><span class="t-title">3 案の比較</span></figcaption>
+  <div class="table-scroll">
+    <table class="cmp">
+      <colgroup><col><col><col class="pick"><col></colgroup>
+      <thead><tr>
+        <th scope="col" class="axis">評価軸</th>
+        <th scope="col">案 A</th><th scope="col" class="pick">案 B</th><th scope="col">案 C</th>
+      </tr></thead>
+      <tbody>
+        <tr><th scope="row" class="axis">実装量<span class="axis-sub">行数の目安</span></th>
+            <td><span class="num">40</span></td><td class="pick"><span class="num">180</span></td><td><span class="num">920</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</figure>
+```
+
+軸が 2 つだけ、または行が少なく横スクロールが不要な表では、`cmp` を使わず素の `<table>` にする。sticky と最小幅は狭い表では邪魔になる。
+
 使い分けの基準:
 
 - 比較表には `table-wrap` + `table-cap` で番号と表題を付ける。本文からの参照は「表 1」で行う。
+- 軸が 3 つ以上あるなら `table.cmp` + `axis` を使い、推奨案の列に `pick` を付ける。
 - 評価軸 (容易さ・成熟度・リスク等) は文字だけでなく `rate` の点表示でも符号化する。
 - 推奨・決定は本文の段落に埋めず、`reco` または `decision-panel` で独立させる。
 - これらは class 指定だけで効く。`style` 属性の直書きで同等の見た目を再実装しない。
@@ -93,6 +125,8 @@ Follow the language of the latest user request for progress updates, final respo
 ## Style Classes Available in html Blocks
 
 The bundled `style.css` ships ready-to-use presentation classes for `html` blocks. When the content contains comparisons, ratings, recommendations, or decisions, do not stop at bare `<table>` / `<p>`: use `table-wrap` + `table-cap` (numbered table captions), `axis-sub` (header sub-labels), `rate good|mid|low r1..r5` with five `pip` elements (dot ratings), `tag-yes` / `tag-no` / `tag-cell-note` (availability cells), `num` (tabular figures), `reco` + `reco-tag` (recommendation panel), `decision-panel` (decision box), `lead` / `lead-note` (lead paragraphs), and `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` (code token coloring). Reference numbered tables from body text as "表 1" / "Table 1". These work by class alone; do not re-implement the same look with inline `style` attributes.
+
+For comparisons with three or more axes, use `<table class="cmp">` inside `table-scroll`: the header row stays sticky while scrolling, `axis` on the first column keeps the comparison axis pinned during horizontal scroll, and `pick` on a `<col>`, `th`, or `td` tints the recommended option's column green. Keep plain `<table>` for narrow two-column comparisons — the sticky behavior and 720px minimum width get in the way there.
 <!-- END SHARED: html-style-classes -->
 
 <!-- BEGIN SHARED: html-design-guidance -->
