@@ -112,8 +112,9 @@ def _contrast_errors(theme_name: str, token_name: str, value: str) -> list[str]:
 def _pair_contrast_errors(theme_name: str, theme: Any) -> list[str]:
     """brand と brand_soft を同時に指定した場合、その 2 色の関係も検査する。
 
-    style.css の `#focusToggle[aria-pressed="true"]` が brand_soft 背景に brand 文字を
-    載せるため、片方ずつ地色と比べただけでは読めない組み合わせが通ってしまう。
+    style.css の `#tocToggle` / `#commentsToggle` が aria-pressed=true のとき
+    brand_soft 背景に brand 文字を載せるため、片方ずつ地色と比べただけでは読めない
+    組み合わせが通ってしまう。
     """
     if not isinstance(theme, dict):
         return []
@@ -127,7 +128,7 @@ def _pair_contrast_errors(theme_name: str, theme: Any) -> list[str]:
     if ratio < MIN_CONTRAST_RATIO:
         return [
             f"metadata.palette.{theme_name} brand {brand} on brand_soft {soft} has contrast "
-            f"{ratio:.2f} (must be >= {MIN_CONTRAST_RATIO}; used by the focus toggle)"
+            f"{ratio:.2f} (must be >= {MIN_CONTRAST_RATIO}; used by toc/comments toggles)"
         ]
     return []
 

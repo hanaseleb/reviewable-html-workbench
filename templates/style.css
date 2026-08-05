@@ -250,6 +250,11 @@ body {
 .toc li a.current { color: var(--ink); border-left-color: var(--brand); font-weight: 600; }
 .toc-list > li.toc-h2 { font-weight: 600; margin-top: var(--sp-2); }
 .toc-list > li.toc-h2 > ol { font-weight: 400; margin-left: var(--sp-3); font-size: 0.9em; }
+/* 項 (heading_level 4) の階層 */
+.toc-list > li.toc-h2 > ol > li > ol { margin-left: var(--sp-3); font-size: 0.94em; }
+.toc-list > li.toc-h2 > ol > li > ol > li a { color: var(--ink-3); padding-top: 3px; padding-bottom: 3px; }
+.toc-list > li.toc-h2 > ol > li > ol > li a:hover,
+.toc-list > li.toc-h2 > ol > li > ol > li a.current { color: var(--ink); }
 
 /* Main column = the paper */
 .doc-main { min-width: 0; }
@@ -337,8 +342,14 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
 .review-block > h4 { font-size: var(--fs-body); font-weight: 600; margin: var(--sp-4) 0 var(--sp-2); }
 .review-block > h4 .sub-sec-no, .block-content h4 .sub-sec-no { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); font-weight: 500; margin-right: 6px; }
 .prose.autonum { counter-reset: h2 h3 h4; }
-.prose.autonum .review-block:has(> h2) { counter-increment: h2; counter-reset: h3 h4; }
-.prose.autonum .review-block:has(> h3) { counter-increment: h3; counter-reset: h4; }
+/* 章が変わったら節・項の番号を 1 に戻す。counter-reset ではなく counter-set を使うのは、
+   counter-reset が要素ごとに新しい counter を作る仕様のため。block が兄弟として横に並ぶ
+   この構造では 2 つ目以降の章で番号が振り直されず連番のままになる (Chromium で実測)。
+   counter-set は現在の counter の値を書き換えるので、章をまたいでも 1 から振り直せる */
+.prose.autonum .review-block:has(> h2) { counter-increment: h2; counter-set: h3 0 h4 0; }
+.prose.autonum .review-block:has(> h3) { counter-increment: h3; counter-set: h4 0; }
+/* 章 (h2) → 節 (h3) → 項 (h4) の 3 階層まで採番する。
+   block の title でも content 内の小見出しでも、h4 は同じ counter を進める */
 .prose.autonum .review-block > h4, .prose.autonum .block-content h4 { counter-increment: h4; }
 .prose.autonum .sec-no, .prose.autonum .sub-sec-no { display: none; }
 .prose.autonum .review-block > h2::before {
@@ -450,11 +461,14 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
   letter-spacing: .01em;
   margin: var(--sp-5) 0 var(--sp-3);
 }
-.block-content h4 {
+.block-content h4,
+.block-content h5 {
   font-size: var(--fs-body);
   font-weight: 600;
   margin: var(--sp-4) 0 var(--sp-2);
 }
+/* 項 (heading_level 4) の中の小見出し。番号は 3 階層で止め、ここには付けない */
+.block-content h5 { color: var(--ink-2); }
 .block-content {
   max-width: 100%;
   margin: 0;
@@ -865,17 +879,17 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .only-open .cx[data-state="reply"], .only-open .cx[data-state="resolved"] { background: transparent; border-bottom: 0; }
 .hide-resolved .cx[data-state="resolved"] { background: transparent; border-bottom: 0; cursor: default; }
 
-/* ---------- 15b. FOCUS / WIDE READING MODE --------------- */
-.is-focus .doc-grid { grid-template-columns: minmax(0, 1fr); }
-.is-focus .toc, .is-focus .cmt-rail { display: none; }
-.is-focus .doc-shell { max-width: 1480px; }
-.is-focus .paper { padding: var(--sp-7) clamp(28px, 5vw, 76px) var(--sp-8); }
-.is-focus .prose p, .is-focus .prose ul, .is-focus .prose ol, .is-focus .doc-deck { max-width: none; }
-/* big blocks use the full width gained by hiding the rails */
-.is-focus .table-wrap, .is-focus .code, .is-focus .figure, .is-focus .mermaid, .is-focus .summary, .is-focus .meta-grid { max-width: none; }
-.is-focus .cx { background: transparent; border-bottom: 0; cursor: default; }
-.is-focus .cx .cx-num { display: none; }
-#focusToggle[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+/* ---------- 15b. TOC / COMMENTS VISIBILITY --------------- */
+/* 既定は 3 カラム (232 / 1fr / 332)。隠した列の幅は本文が吸収する。doc-shell max-width は 1600px のまま */
+.canvas.hide-toc .toc { display: none; }
+.canvas.hide-comments .cmt-rail { display: none; }
+.canvas.hide-toc .doc-grid { grid-template-columns: minmax(0, 1fr) 332px; }
+.canvas.hide-comments .doc-grid { grid-template-columns: 232px minmax(0, 1fr); }
+.canvas.hide-toc.hide-comments .doc-grid { grid-template-columns: minmax(0, 1fr); }
+.canvas.hide-comments .cx { background: transparent; border-bottom: 0; cursor: default; }
+.canvas.hide-comments .cx .cx-num { display: none; }
+#tocToggle[aria-pressed="true"],
+#commentsToggle[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
 
 /* ---------- 15c. PUBLISHED / PUBLIC MODE ----------------- */
 
@@ -888,12 +902,12 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .is-published .prose p, .is-published .prose ul, .is-published .prose ol,
 .is-published .doc-deck { max-width: none; }
 
-/* 公開内最大化 */
-.is-published .canvas.is-focus .doc-shell { max-width: 1480px; }
-.is-published .canvas.is-focus .prose p,
-.is-published .canvas.is-focus .prose ul,
-.is-published .canvas.is-focus .prose ol,
-.is-published .canvas.is-focus .doc-deck { max-width: none; }
+/* 公開プレビュー内の紙幅切替。preview 側の目次 / コメントの表示切替とは別の状態として持つ */
+.is-published .canvas.is-wide .doc-shell { max-width: 1480px; }
+.is-published .canvas.is-wide .prose p,
+.is-published .canvas.is-wide .prose ul,
+.is-published .canvas.is-wide .prose ol,
+.is-published .canvas.is-wide .doc-deck { max-width: none; }
 
 /* 大きなブロックも幅制限解除 */
 .is-published .table-wrap, .is-published .code, .is-published .figure,

@@ -78,7 +78,7 @@ render 済みバンドルに以下が必要:
 |------|---------|
 | `lang` | `<html>` 要素の `lang` 属性をそのまま保持 |
 | `data-density` | `<html>` 要素の `data-density` 属性をそのまま保持 |
-| focus 状態 | 入力の `<main class="canvas is-focus">` があれば `is-focus` クラスを保持 |
+| 幅状態 | 入力の `<main class="canvas is-wide">` があれば `is-wide` クラスを保持 (公開プレビューの最大化) |
 | `<h1 class="doc-title">` | 文書タイトルとして `<title>` と OG/Twitter メタタグに反映 |
 | 本文コンテンツ | `<article class="doc-main">` 内の全コンテンツ（下記の除去対象を除く） |
 

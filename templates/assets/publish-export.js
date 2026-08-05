@@ -190,7 +190,7 @@
     const density = root.getAttribute("data-density") || "compact";
     const docLang = root.lang || "ja";
     const canvas = document.getElementById("canvas");
-    const isFocus = canvas && canvas.classList.contains("is-focus");
+    const isWide = canvas && canvas.classList.contains("is-wide");
     const titleElement = clone.querySelector(".doc-title");
     const title = titleElement ? titleElement.textContent.trim() : "document";
 
@@ -226,7 +226,7 @@
       mermaidScripts +
       "</head>\n" +
       "<body class=\"is-published\">\n" +
-      "<main class=\"canvas" + (isFocus ? " is-focus" : "") + "\">\n" +
+      "<main class=\"canvas" + (isWide ? " is-wide" : "") + "\">\n" +
       clone.outerHTML + "\n</main>\n</body>\n</html>\n";
     return { html, title };
   }

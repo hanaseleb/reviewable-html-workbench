@@ -83,9 +83,16 @@ def _render_block_content(
 
 
 def _shift_content_headings(content: str, heading_level: int) -> str:
+    # block の title より浅い見出しが content に書かれていた場合に押し下げる。
+    # 節 (h3) の中の小見出しは h4、項 (h4) の中の小見出しは h5 にする。
     if heading_level == 3:
         content = content.replace("<h3>", "<h4>")
         content = content.replace("</h3>", "</h4>")
+    elif heading_level >= 4:
+        content = content.replace("<h4>", "<h5>")
+        content = content.replace("</h4>", "</h5>")
+        content = content.replace("<h3>", "<h5>")
+        content = content.replace("</h3>", "</h5>")
     return content
 
 

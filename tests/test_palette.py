@@ -86,7 +86,7 @@ class ValidatePaletteTest(unittest.TestCase):
         self.assertIn("bg-app", errors[0])
 
     def test_brand_on_brand_soft_pair_is_checked(self) -> None:
-        """focusToggle は brand_soft 背景に brand 文字を載せるため 2 色の関係も検査する。
+        """toc/comments トグルは brand_soft 背景に brand 文字を載せるため 2 色の関係も検査する。
 
         個別には地色・ink と十分なコントラストを持つが、互いに近い色の組み合わせを弾く。
         """
@@ -98,7 +98,7 @@ class ValidatePaletteTest(unittest.TestCase):
         errors = validate_palette({"palette": palette})
         self.assertEqual(len(errors), 1)
         self.assertIn("on brand_soft", errors[0])
-        self.assertIn("focus toggle", errors[0])
+        self.assertIn("toc/comments toggles", errors[0])
 
     def test_brand_as_button_background_is_not_checked(self) -> None:
         """brand 背景の白文字比は検査しない (既定 dark が 2.62 で、課すと既定系統が使えない)。

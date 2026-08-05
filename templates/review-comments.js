@@ -14,16 +14,17 @@
       reopenBtn: "再オープン",
       deleteBtn: "削除",
       commentCount: function (u, t) { return u + " 件未解決 / " + t + " 件"; },
-      focusLabel: "最大化",
-      normalLabel: "標準表示",
       filterAll: "すべて",
       filterHideResolved: "未解決のみ",
       filterOnlyOpen: "未対応のみ",
       filterLabel: "レビューフィルタ",
-      focusTitle: "最大化モード",
       themeTitle: "テーマ切替",
       tocLabel: "目次",
       tocHeader: "目次",
+      tocToggleLabel: "目次",
+      tocToggleTitle: "目次の表示切替",
+      commentsToggleLabel: "コメント",
+      commentsToggleTitle: "コメントの表示切替",
       publishLabel: "公開プレビュー",
       publishActive: "プレビュー中",
       publishTitle: "公開プレビュー",
@@ -51,16 +52,17 @@
       reopenBtn: "Reopen",
       deleteBtn: "Delete",
       commentCount: function (u, t) { return u + " unresolved / " + t + " total"; },
-      focusLabel: "Maximize",
-      normalLabel: "Normal",
       filterAll: "All",
       filterHideResolved: "Unresolved only",
       filterOnlyOpen: "Open only",
       filterLabel: "Review filter",
-      focusTitle: "Maximize mode",
       themeTitle: "Toggle theme",
       tocLabel: "Table of contents",
       tocHeader: "Contents",
+      tocToggleLabel: "Contents",
+      tocToggleTitle: "Toggle table of contents",
+      commentsToggleLabel: "Comments",
+      commentsToggleTitle: "Toggle comments",
       publishLabel: "Publish preview",
       publishActive: "Previewing",
       publishTitle: "Publish preview",
@@ -80,6 +82,11 @@
 
   const lang = document.documentElement.lang === "ja" ? "ja" : "en";
   const t = I18N[lang];
+
+  // 目次から飛んだとき、見出しを可視領域の上端から何 px 下に止めるか。
+  // 基準は block の上端ではなく見出しそのものにする。block の上余白は種類ごとに違い
+  // (実測 14px / 38px)、上端合わせだと見出しの止まる位置が節ごとにばらつくため。
+  const TOC_JUMP_OFFSET = 28;
 
   const COMMENTS_URL = "annotations/comments.json";
   const STORAGE_PREFIX = "reviewable-html-comments:";
@@ -115,7 +122,7 @@
 
   initThemeToggle();
   initFilter();
-  initFocusToggle();
+  initPanelToggles();
   initPublishToggle();
   initTocScrollSpy();
   initCommentRailScroll();
@@ -1089,34 +1096,154 @@
     });
   }
 
-  function applyFocusState(canvas, button, isFocus) {
-    canvas.classList.toggle("is-focus", isFocus);
-    button.setAttribute("aria-pressed", isFocus ? "true" : "false");
-    const label = button.querySelector(".ft-label");
-    if (label) {
-      label.textContent = isFocus ? t.normalLabel : t.focusLabel;
-    } else {
-      button.textContent = isFocus ? t.normalLabel : t.focusLabel;
+  /**
+   * レイアウト変更の前後で、読んでいた箇所を画面上の同じ高さに留める。
+   * mutate 内で class や DOM を変え、直後に scrollTop を補正する。
+   */
+  function keepReadingPosition(mutate) {
+    const canvas = document.getElementById("canvas");
+    if (!canvas || typeof mutate !== "function") {
+      if (typeof mutate === "function") {
+        mutate();
+      }
+      return;
+    }
+    const paper = canvas.querySelector(".paper");
+    const prose = canvas.querySelector(".prose");
+    const canvasTopBefore = canvas.getBoundingClientRect().top;
+    const anchor = pickReadingAnchor(paper, prose, canvasTopBefore);
+    let beforeOffset = null;
+    let beforeRatio = null;
+    let straddling = false;
+    if (anchor) {
+      const rect = anchor.getBoundingClientRect();
+      straddling = rect.top < canvasTopBefore && rect.bottom > canvasTopBefore;
+      if (straddling && rect.height > 0) {
+        beforeRatio = (canvasTopBefore - rect.top) / rect.height;
+      } else {
+        beforeOffset = rect.top - canvasTopBefore;
+      }
+    }
+
+    mutate();
+
+    if (!anchor || !document.contains(anchor)) {
+      return;
+    }
+    const canvasTopAfter = canvas.getBoundingClientRect().top;
+    const rectAfter = anchor.getBoundingClientRect();
+    let delta = 0;
+    if (straddling && beforeRatio != null && rectAfter.height > 0) {
+      const desiredTop = canvasTopAfter - beforeRatio * rectAfter.height;
+      delta = rectAfter.top - desiredTop;
+    } else if (beforeOffset != null) {
+      const afterOffset = rectAfter.top - canvasTopAfter;
+      delta = afterOffset - beforeOffset;
+    }
+    if (Math.abs(delta) > 0.5) {
+      canvas.scrollTop += delta;
     }
   }
 
-  function initFocusToggle() {
-    const button = document.getElementById("focusToggle");
+  function pickReadingAnchor(paper, prose, canvasTop) {
+    const candidates = [];
+    const collect = (parent) => {
+      if (!parent) {
+        return;
+      }
+      Array.from(parent.children).forEach((el) => {
+        if (el.nodeType !== 1) {
+          return;
+        }
+        candidates.push(el);
+      });
+    };
+    collect(paper);
+    collect(prose);
+    // document 順 (木の先順) に近い並び: paper 直下の後に prose 直下だが、
+    // prose は paper 内にあることが多いので、位置でソートする
+    candidates.sort((a, b) => {
+      const ar = a.getBoundingClientRect();
+      const br = b.getBoundingClientRect();
+      return ar.top - br.top || ar.left - br.left;
+    });
+    // 可視領域上端より下に上端がある最初の要素
+    for (let i = 0; i < candidates.length; i++) {
+      const el = candidates[i];
+      const rect = el.getBoundingClientRect();
+      if (rect.height <= 0) {
+        continue;
+      }
+      if (rect.top >= canvasTop) {
+        return el;
+      }
+    }
+    // 上端をまたぐ最も内側 (面積が小さく top が近い) 要素
+    let best = null;
+    let bestArea = Infinity;
+    candidates.forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (rect.height <= 0) {
+        return;
+      }
+      if (rect.top < canvasTop && rect.bottom > canvasTop) {
+        const area = rect.width * rect.height;
+        if (area < bestArea) {
+          bestArea = area;
+          best = el;
+        }
+      }
+    });
+    return best;
+  }
+
+  function applyHideClass(canvas, className, hide) {
+    canvas.classList.toggle(className, hide);
+  }
+
+  function initPanelToggles() {
     const canvas = document.getElementById("canvas");
-    if (!button || !canvas) {
+    const tocButton = document.getElementById("tocToggle");
+    const commentsButton = document.getElementById("commentsToggle");
+    if (!canvas) {
       return;
     }
-    const stored = localStorage.getItem("rw:focus");
-    if (stored === "true") {
-      applyFocusState(canvas, button, true);
+
+    const applyStored = (button, className, storageKey) => {
+      if (!button) {
+        return;
+      }
+      const stored = localStorage.getItem(storageKey);
+      // "true" = 非表示。未設定は表示 (aria-pressed=true)
+      const hide = stored === "true";
+      applyHideClass(canvas, className, hide);
+      button.setAttribute("aria-pressed", hide ? "false" : "true");
+    };
+
+    // 初期化はスクロール前のため keepReadingPosition を通さない
+    applyStored(tocButton, "hide-toc", "rw:hide-toc");
+    applyStored(commentsButton, "hide-comments", "rw:hide-comments");
+    if (tocButton || commentsButton) {
       schedulePositionCards();
     }
-    button.addEventListener("click", () => {
-      const isFocus = !canvas.classList.contains("is-focus");
-      applyFocusState(canvas, button, isFocus);
-      localStorage.setItem("rw:focus", isFocus ? "true" : "false");
-      schedulePositionCards();
-    });
+
+    const bindToggle = (button, className, storageKey) => {
+      if (!button) {
+        return;
+      }
+      button.addEventListener("click", () => {
+        keepReadingPosition(() => {
+          const willHide = !canvas.classList.contains(className);
+          applyHideClass(canvas, className, willHide);
+          button.setAttribute("aria-pressed", willHide ? "false" : "true");
+          localStorage.setItem(storageKey, willHide ? "true" : "false");
+          schedulePositionCards();
+        });
+      });
+    };
+
+    bindToggle(tocButton, "hide-toc", "rw:hide-toc");
+    bindToggle(commentsButton, "hide-comments", "rw:hide-comments");
   }
 
   function initPublishToggle() {
@@ -1146,20 +1273,15 @@
         if (!canvas) {
           return;
         }
-        const isMax = widthButton.getAttribute("data-pw") === "max";
-        canvas.classList.toggle("is-focus", isMax);
-        const focusButton = document.getElementById("focusToggle");
-        if (focusButton) {
-          focusButton.setAttribute("aria-pressed", isMax ? "true" : "false");
-          const label = focusButton.querySelector(".ft-label");
-          if (label) {
-            label.textContent = isMax ? t.normalLabel : t.focusLabel;
-          }
-        }
-        document.querySelectorAll(".pe-w").forEach((buttonItem) => {
-          buttonItem.classList.toggle("on", buttonItem === widthButton);
+        keepReadingPosition(() => {
+          const isMax = widthButton.getAttribute("data-pw") === "max";
+          canvas.classList.toggle("is-wide", isMax);
+          localStorage.setItem("rw:pub-wide", isMax ? "true" : "false");
+          document.querySelectorAll(".pe-w").forEach((buttonItem) => {
+            buttonItem.classList.toggle("on", buttonItem === widthButton);
+          });
+          schedulePositionCards();
         });
-        schedulePositionCards();
       });
     });
 
@@ -1174,24 +1296,29 @@
   }
 
   function setPublished(on) {
-    document.body.classList.toggle("is-published", on);
-    const button = document.getElementById("publishToggle");
-    if (button) {
-      button.setAttribute("aria-pressed", on ? "true" : "false");
-      const label = button.querySelector(".pt-label");
-      if (label) {
-        label.textContent = on ? t.publishActive : t.publishLabel;
+    keepReadingPosition(() => {
+      document.body.classList.toggle("is-published", on);
+      const button = document.getElementById("publishToggle");
+      if (button) {
+        button.setAttribute("aria-pressed", on ? "true" : "false");
+        const label = button.querySelector(".pt-label");
+        if (label) {
+          label.textContent = on ? t.publishActive : t.publishLabel;
+        }
       }
-    }
-    if (on) {
-      const canvas = document.getElementById("canvas");
-      const isFocus = canvas && canvas.classList.contains("is-focus");
-      document.querySelectorAll(".pe-w").forEach((widthButton) => {
-        const isMax = widthButton.getAttribute("data-pw") === "max";
-        widthButton.classList.toggle("on", isMax === Boolean(isFocus));
-      });
-    }
-    schedulePositionCards();
+      if (on) {
+        const canvas = document.getElementById("canvas");
+        if (canvas) {
+          const storedWide = localStorage.getItem("rw:pub-wide") === "true";
+          canvas.classList.toggle("is-wide", storedWide);
+          document.querySelectorAll(".pe-w").forEach((widthButton) => {
+            const isMax = widthButton.getAttribute("data-pw") === "max";
+            widthButton.classList.toggle("on", isMax === storedWide);
+          });
+        }
+      }
+      schedulePositionCards();
+    });
   }
 
   function initTocScrollSpy() {
@@ -1200,7 +1327,9 @@
       return;
     }
     const links = Array.from(toc.querySelectorAll("a[href^='#']"));
-    const headings = Array.from(document.querySelectorAll(".prose h2[id], [data-review-block] h2[id], h2[id]"));
+    // 現在位置の判定は block を対象にする。目次のリンク先は block の id であり、
+    // 見出し要素 (h2 等) には id が付かないため、見出しを対象にすると常に該当なしになる
+    const blocks = Array.from(document.querySelectorAll(".prose [data-review-block][id]"));
     const canvas = document.getElementById("canvas");
     links.forEach((link) => {
       link.addEventListener("click", (event) => {
@@ -1210,16 +1339,18 @@
         if (!target) {
           return;
         }
+        const heading = target.querySelector(":scope > h2, :scope > h3, :scope > h4") || target;
         const sc = canvas || document.documentElement;
-        sc.scrollTop = target.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 72;
+        sc.scrollTop =
+          heading.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - TOC_JUMP_OFFSET;
       });
     });
-    const onScroll = rafThrottle(() => updateCurrentSection(links, headings));
+    const onScroll = rafThrottle(() => updateCurrentSection(links, blocks));
     if (canvas) {
       canvas.addEventListener("scroll", onScroll);
     }
     window.addEventListener("scroll", onScroll);
-    updateCurrentSection(links, headings);
+    updateCurrentSection(links, blocks);
 
     const tocList = toc.querySelector("ol.toc-list");
     if (tocList) {
@@ -1236,11 +1367,11 @@
     }
   }
 
-  function updateCurrentSection(links, headings) {
+  function updateCurrentSection(links, blocks) {
     let current = null;
-    for (const heading of headings) {
-      if (heading.getBoundingClientRect().top <= 100) {
-        current = heading;
+    for (const block of blocks) {
+      if (block.getBoundingClientRect().top <= 100) {
+        current = block;
       }
     }
     links.forEach((link) => link.classList.remove("current"));

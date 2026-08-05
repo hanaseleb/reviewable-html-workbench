@@ -35,7 +35,8 @@ def _create_minimal_bundle(bundle_dir: Path) -> None:
         '    <header class="topbar">\n'
         '      <div class="toolset">\n'
         '        <select id="filterSelect"><option value="all">All</option></select>\n'
-        '        <button id="focusToggle" type="button">Focus</button>\n'
+        '        <button id="tocToggle" type="button">Contents</button>\n'
+        '        <button id="commentsToggle" type="button">Comments</button>\n'
         '        <button id="publishToggle" type="button">Publish</button>\n'
         '        <button id="themeToggle" type="button">Theme</button>\n'
         "      </div>\n"
@@ -125,6 +126,8 @@ class TestPublishBundle(unittest.TestCase):
         # レビュー UI の DOM 要素が除去されていること
         self.assertNotIn('class="cmt-rail"', body_content)
         self.assertNotIn('class="pub-exit"', body_content)
+        self.assertNotIn("tocToggle", body_content)
+        self.assertNotIn("commentsToggle", body_content)
         self.assertNotIn("focusToggle", body_content)
         self.assertNotIn("filterSelect", body_content)
         self.assertNotIn("data-review-block", body_content)

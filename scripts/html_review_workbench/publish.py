@@ -68,7 +68,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
     density = _extract_attr(source_html, r'data-density="([^"]*)"') or "compact"
 
     canvas_match = re.search(r'<main[^>]*class="canvas([^"]*)"', source_html)
-    is_focus = bool(canvas_match and "is-focus" in canvas_match.group(1))
+    is_wide = bool(canvas_match and "is-wide" in canvas_match.group(1))
 
     article = _extract_article(source_html)
     article = _strip_review_attrs(article)
@@ -91,7 +91,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
         css=css,
         publish_overrides=publish_overrides,
         article=article,
-        is_focus=is_focus,
+        is_wide=is_wide,
         mermaid_script=mermaid_script,
         highlight_script=highlight_script,
         checklist_script=checklist_script,
@@ -287,7 +287,7 @@ def _assemble(
     css: str,
     publish_overrides: str,
     article: str,
-    is_focus: bool,
+    is_wide: bool,
     mermaid_script: str = "",
     highlight_script: str = "",
     checklist_script: str = "",
@@ -297,7 +297,7 @@ def _assemble(
     """公開用 standalone HTML を組み立てる。"""
     esc_title = escape(title)
     esc_desc = escape(description)
-    focus_class = " is-focus" if is_focus else ""
+    wide_class = " is-wide" if is_wide else ""
     # チェックリストの保存 key は文書識別子に紐づくため、publish 版でも同じ値を残す
     doc_id_attr = f' data-document-id="{escape(document_id, quote=True)}"' if document_id else ""
 
@@ -322,7 +322,7 @@ def _assemble(
         f"{interactive_state_script}"
         f"</head>\n"
         f'<body class="is-published"{doc_id_attr}>\n'
-        f'<main class="canvas{focus_class}">\n'
+        f'<main class="canvas{wide_class}">\n'
         f'<div class="doc-shell">\n<div class="doc-grid">\n'
         f"{article}\n"
         f"</div>\n</div>\n"

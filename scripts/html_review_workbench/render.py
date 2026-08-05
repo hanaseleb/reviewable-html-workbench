@@ -12,7 +12,9 @@ from typing import Any
 
 from scripts.html_review_workbench import __version__
 from scripts.html_review_workbench.common import (
+    MAX_HEADING_LEVEL,
     MERMAID_INIT_JS,
+    MIN_HEADING_LEVEL,
     PUBLISH_EXPORT_JS_PATH,
     PUBLISH_OVERRIDES_CSS_PATH,
     REPO_ROOT,
@@ -288,30 +290,48 @@ def _render_toc(blocks: list[dict[str, Any]]) -> str:
             return ""
         return "<ol>\n" + "\n".join(items) + "\n</ol>"
 
-    html = '<ol class="toc-list">\n'
-    in_nested = False
+    # heading_level 2/3/4 を、そのまま入れ子の <ol> へ写す。
+    # level は「いま開いている <ol> が受け持つ見出しレベル」、
+    # li_open は「その階層の直前の <li> をまだ閉じていない」を表す。
+    parts: list[str] = ['<ol class="toc-list">']
+    level = MIN_HEADING_LEVEL
+    li_open = False
     for block in blocks:
         title = block.get("title")
         if not isinstance(title, str) or not title:
             continue
         block_id = escape(block["id"], quote=True)
-        heading_level = block["heading_level"]
-        if heading_level == 2:
-            if in_nested:
-                html += "</ol>\n</li>\n"
-                in_nested = False
-            html += f'<li class="toc-h2"><a href="#{block_id}">{escape(title)}</a>\n'
-            html += "<ol>\n"
-            in_nested = True
-        else:
-            if not in_nested:
-                html += '<li class="toc-h2"><span></span>\n<ol>\n'
-                in_nested = True
-            html += f'<li><a href="#{block_id}">{escape(title)}</a></li>\n'
-    if in_nested:
-        html += "</ol>\n</li>\n"
-    html += "</ol>"
-    return html
+        target = min(max(int(block["heading_level"]), MIN_HEADING_LEVEL), MAX_HEADING_LEVEL)
+        while target > level:
+            if not li_open:
+                # 親の見出しが無いまま下位が来た場合は空の親を立てる
+                parts.append('<li class="toc-h2"><span></span>')
+                li_open = True
+            parts.append("<ol>")
+            level += 1
+            li_open = False
+        while target < level:
+            if li_open:
+                parts.append("</li>")
+            parts.append("</ol>")
+            level -= 1
+            li_open = True  # 1 つ上の <li> は開いたままなので、次で閉じる
+        if li_open:
+            parts.append("</li>")
+            li_open = False
+        cls = ' class="toc-h2"' if target == MIN_HEADING_LEVEL else ""
+        parts.append(f'<li{cls}><a href="#{block_id}">{escape(title)}</a>')
+        li_open = True
+    while level > MIN_HEADING_LEVEL:
+        if li_open:
+            parts.append("</li>")
+        parts.append("</ol>")
+        level -= 1
+        li_open = True
+    if li_open:
+        parts.append("</li>")
+    parts.append("</ol>")
+    return "\n".join(parts)
 
 
 def _render_blocks(

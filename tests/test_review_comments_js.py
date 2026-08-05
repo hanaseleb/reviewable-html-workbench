@@ -29,6 +29,8 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
             "findBestOccurrence",
             "activate",
             "initPublishToggle",
+            "initPanelToggles",
+            "keepReadingPosition",
             "setPublished",
             "threadCardState",
             "normalizeThreadStatus",

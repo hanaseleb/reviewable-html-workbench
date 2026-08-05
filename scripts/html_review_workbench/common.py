@@ -19,6 +19,11 @@ PUBLISH_OVERRIDES_CSS_PATH = REPO_ROOT / "templates" / "assets" / "publish-overr
 TASK_CHECKLIST_JS_PATH = REPO_ROOT / "templates" / "assets" / "task-checklist.js"
 INTERACTIVE_STATE_JS_PATH = REPO_ROOT / "templates" / "assets" / "interactive-state.js"
 
+# block の title を出す見出しの階層。2 = 章、3 = 節、4 = 項。
+# h1 は文書タイトル専用、h5 以下は content 内の小見出しに残す。
+MIN_HEADING_LEVEL = 2
+MAX_HEADING_LEVEL = 4
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
