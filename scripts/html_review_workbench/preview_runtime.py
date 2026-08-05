@@ -23,6 +23,23 @@ DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60
 STATE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
+def resolve_sse_start_id(header_value: str | None, current_last_id: int) -> int:
+    """SSE でどのイベントから送り始めるかを決める。
+
+    初回接続 (Last-Event-ID が無い) では履歴を送らず、今の位置から始める。
+    ブラウザは初回接続でこの header を送らないため、ここで 0 を返すと EventBus が
+    保持している過去の document_updated が再送され、更新バナーの「リロード」を押した
+    直後にまた同じバナーが出てしまう。
+    再接続 (header あり) では受け取り済みの次から送り、切断中のイベントを取りこぼさない。
+    """
+    if header_value is None:
+        return current_last_id
+    try:
+        return int(header_value)
+    except ValueError:
+        return current_last_id
+
+
 class ReviewPreviewHandler(SimpleHTTPRequestHandler):
     comments_route = "/annotations/comments.json"
     checklist_route = "/annotations/checklist-state.json"
@@ -161,11 +178,7 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
-        last_id_str = self.headers.get("Last-Event-ID", "0")
-        try:
-            last_id = int(last_id_str)
-        except ValueError:
-            last_id = 0
+        last_id = resolve_sse_start_id(self.headers.get("Last-Event-ID"), self.event_bus.last_id)
 
         try:
             for event in self.event_bus.subscribe(last_event_id=last_id):

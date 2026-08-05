@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import urllib.request
 from pathlib import Path
@@ -89,17 +90,18 @@ class AddReplyCliTest(unittest.TestCase):
 
             session = start_preview(root, "local", owner_pid=os.getpid(), idle_timeout=0)
             try:
-                _run_cli(
-                    "add-reply",
-                    "--root",
-                    str(root),
-                    "--thread-id",
-                    "cmt-1",
-                    "--body",
-                    "Applied this change.",
-                )
+                with _open_sse(session.url.replace("/index.html", "/events")) as stream:
+                    _run_cli(
+                        "add-reply",
+                        "--root",
+                        str(root),
+                        "--thread-id",
+                        "cmt-1",
+                        "--body",
+                        "Applied this change.",
+                    )
 
-                event = _read_sse_event(session.url.replace("/index.html", "/events"))
+                    event = _read_sse_event(stream)
                 self.assertEqual(event["event"], "comment_updated")
                 self.assertEqual(event["data"]["source"], "agent")
                 self.assertEqual(event["data"]["thread_id"], "cmt-1")
@@ -157,22 +159,34 @@ def _read_comments(root: Path) -> dict[str, object]:
     return json.loads((root / "annotations/comments.json").read_text(encoding="utf-8"))
 
 
-def _read_sse_event(url: str) -> dict[str, object]:
-    with urllib.request.urlopen(url, timeout=5) as response:
-        event: dict[str, object] = {}
-        data = ""
-        while True:
-            line = response.readline().decode("utf-8").strip()
-            if line == "":
-                break
-            if line.startswith("id: "):
-                event["id"] = line[4:]
-            elif line.startswith("event: "):
-                event["event"] = line[7:]
-            elif line.startswith("data: "):
-                data = line[6:]
-        event["data"] = json.loads(data)
-        return event
+def _open_sse(url: str):
+    """SSE の接続を先に開く。
+
+    実運用ではブラウザが先に接続していて、agent が後から通知を publish する。
+    接続より前に publish されたイベントは配信対象にならない (履歴を再送すると
+    ページを開くたびに過去の通知が再表示されるため) ので、test も同じ順序で書く。
+    """
+    response = urllib.request.urlopen(url, timeout=10)
+    time.sleep(0.3)  # server 側が購読を開始するまで待つ
+    return response
+
+
+def _read_sse_event(response) -> dict[str, object]:
+    """開いておいた接続から 1 件読む。"""
+    event: dict[str, object] = {}
+    data = ""
+    while True:
+        line = response.readline().decode("utf-8").strip()
+        if line == "":
+            break
+        if line.startswith("id: "):
+            event["id"] = line[4:]
+        elif line.startswith("event: "):
+            event["event"] = line[7:]
+        elif line.startswith("data: "):
+            data = line[6:]
+    event["data"] = json.loads(data)
+    return event
 
 
 def _thread(thread_id: str, *, comment: str = "Please update this section.") -> dict[str, object]:

@@ -432,7 +432,15 @@
     badge.dataset.comment = thread.id || "";
     badge.dataset.commentBadge = thread.id || "";
     badge.dataset.state = threadCardState(thread);
-    badge.textContent = `Comment ${number}`;
+    // 吹き出しアイコン + 番号。「Comment N」と綴ると 5 個並んだだけで幅を大きく取るため、
+    // 何のバッジかはアイコンで示し、文字は番号だけにする
+    badge.innerHTML =
+      '<svg class="rcb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M3 3.5h10v7H8l-3 2.5V10.5H3z"/></svg>';
+    badge.appendChild(document.createTextNode(String(number)));
+    badge.setAttribute("aria-label", `Comment ${number}`);
+    badge.title = `Comment ${number}`;
     badge.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();

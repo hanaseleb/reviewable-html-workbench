@@ -292,7 +292,7 @@ def notify_update(args: argparse.Namespace) -> int:
         url = active_session_base_url(root)
         if url is None:
             print(json.dumps({"status": "failed", "error": "no active preview session found"}, ensure_ascii=False))
-        return 2
+            return 2
     return send_notify(url, message=args.message)
 
 

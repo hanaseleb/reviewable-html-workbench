@@ -888,6 +888,8 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .canvas.hide-toc.hide-comments .doc-grid { grid-template-columns: minmax(0, 1fr); }
 .canvas.hide-comments .cx { background: transparent; border-bottom: 0; cursor: default; }
 .canvas.hide-comments .cx .cx-num { display: none; }
+/* ハイライトを付けられなかったコメントのバッジも、コメントを隠す間は出さない */
+.canvas.hide-comments .review-comment-badges { display: none; }
 #tocToggle[aria-pressed="true"],
 #commentsToggle[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
 
@@ -1169,28 +1171,32 @@ textarea.cmt-input, input.cmt-input {
   background: var(--paper-2);
   border-radius: var(--r-sm);
 }
+/* ハイライトを付けられなかったコメントを示すバッジ。block の末尾に通常フローで置き、
+   横に並べる。以前は block の右上へ絶対配置していたが、本文テキストの上に重なって
+   文字を隠していた (実測で全バッジが本文と重なっていた) */
 .review-comment-badges {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  max-width: calc(100% - 20px);
-  z-index: 1;
+  margin-top: var(--sp-3);
 }
 .review-comment-badge {
-  min-height: 28px;
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px 1px 5px;
   color: var(--open);
   background: var(--open-bg);
   border: 1px solid var(--open-line);
   border-radius: var(--r-pill);
   font: inherit;
-  font-size: var(--fs-caption);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
   cursor: pointer;
 }
+.review-comment-badge .rcb-icon { width: 11px; height: 11px; flex: none; }
 .review-comment-badge.has-review-replies {
   color: var(--reply);
   background: var(--reply-bg);
