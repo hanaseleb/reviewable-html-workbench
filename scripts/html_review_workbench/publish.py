@@ -14,6 +14,12 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+# render.py と同じ検出 (属性付き pre/code の取りこぼし防止)
+_PRE_CODE_RE = re.compile(
+    r"<pre\b[^>]*>\s*<code\b",
+    re.IGNORECASE,
+)
+
 from scripts.html_review_workbench.common import (
     INTERACTIVE_STATE_JS_PATH,
     MERMAID_INIT_JS,
@@ -69,6 +75,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
     article = _strip_review_elements(article)
     article = _embed_images(article, root)
     mermaid_script = _inline_mermaid_script(source_html, article, root)
+    highlight_script = _inline_highlight_script(source_html, article, root)
     checklist_script = _inline_checklist_script(article, root)
     interactive_state_script = _inline_interactive_state_script(article, root)
     document_id = _extract_attr(source_html, r'data-document-id="([^"]*)"') or ""
@@ -86,6 +93,7 @@ def publish_bundle(root: Path, output: Path) -> dict[str, Any]:
         article=article,
         is_focus=is_focus,
         mermaid_script=mermaid_script,
+        highlight_script=highlight_script,
         checklist_script=checklist_script,
         interactive_state_script=interactive_state_script,
         document_id=document_id,
@@ -177,6 +185,38 @@ def _inline_mermaid_script(source_html: str, article: str, root: Path) -> str:
     )
 
 
+def _inline_highlight_script(source_html: str, article: str, root: Path) -> str:
+    """highlight.js 本体と init を standalone HTML に inline 化する。
+
+    本文に <pre><code が無い (または highlight asset が無い) 文書では何も差し込まない。
+    BSD-3-Clause banner は file 先頭の /*! */ として残る。
+    """
+    needs_highlight = (
+        "assets/highlight.min.js" in source_html
+        or "assets/highlight-init.js" in source_html
+        or _PRE_CODE_RE.search(article) is not None
+    )
+    if not needs_highlight:
+        return ""
+    hljs_path = root / "assets" / "highlight.min.js"
+    init_path = root / "assets" / "highlight-init.js"
+    if not hljs_path.is_file():
+        # render 済み bundle に無い場合は template 同梱へ fallback
+        hljs_path = ROOT / "templates" / "assets" / "highlight.min.js"
+    if not init_path.is_file():
+        init_path = ROOT / "templates" / "assets" / "highlight-init.js"
+    if not hljs_path.is_file():
+        raise PublishError(f"assets/highlight.min.js not found in {root}")
+    if not init_path.is_file():
+        raise PublishError(f"assets/highlight-init.js not found in {root}")
+    hljs_script = hljs_path.read_text(encoding="utf-8")
+    init_script = init_path.read_text(encoding="utf-8")
+    return (
+        f"<script>\n{hljs_script}\n</script>\n"
+        f"<script>\n{init_script}\n</script>\n"
+    )
+
+
 def _inline_checklist_script(article: str, root: Path) -> str:
     """作業チェックリスト asset を standalone HTML に inline 化する。
 
@@ -249,6 +289,7 @@ def _assemble(
     article: str,
     is_focus: bool,
     mermaid_script: str = "",
+    highlight_script: str = "",
     checklist_script: str = "",
     interactive_state_script: str = "",
     document_id: str = "",
@@ -276,6 +317,7 @@ def _assemble(
         f"{publish_overrides}"
         f"</style>\n"
         f"{mermaid_script}"
+        f"{highlight_script}"
         # article 内の inline script より先に RHWState を定義する必要があるため head に置く
         f"{interactive_state_script}"
         f"</head>\n"

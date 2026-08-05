@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from html import escape
 from pathlib import Path
@@ -32,6 +33,19 @@ MERMAID_JS_PATH = ROOT / "templates" / "assets" / "mermaid.min.js"
 DIAGRAM_ZOOM_JS_PATH = ROOT / "templates" / "assets" / "diagram-zoom.js"
 TASK_CHECKLIST_JS_PATH = ROOT / "templates" / "assets" / "task-checklist.js"
 INTERACTIVE_STATE_JS_PATH = ROOT / "templates" / "assets" / "interactive-state.js"
+HIGHLIGHT_JS_PATH = ROOT / "templates" / "assets" / "highlight.min.js"
+HIGHLIGHT_INIT_JS_PATH = ROOT / "templates" / "assets" / "highlight-init.js"
+
+# <pre> と <code> の間・各タグの属性・空白/改行を許す (属性付き HTML の取りこぼし防止)
+_PRE_CODE_RE = re.compile(
+    r"<pre\b[^>]*>\s*<code\b",
+    re.IGNORECASE,
+)
+
+
+def _html_has_pre_code(html: str) -> bool:
+    """本文に pre>code があるか (属性付き・改行入りを含む)。"""
+    return _PRE_CODE_RE.search(html) is not None
 
 
 def render_bundle(model_path: Path, output_dir: Path) -> Path:
@@ -48,6 +62,9 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
     image_outputs = _prepare_image_assets(model["blocks"], model_path.parent, output_dir)
     body_html, review_blocks = _render_blocks(model["blocks"], diagrams, image_outputs)
     has_rendered_mermaid = 'class="mermaid"' in body_html
+    # mermaid と同じ条件付き機構: 本文に pre>code がある時だけ highlight を同梱する
+    # (属性や改行が入っても検出する — NG-1)
+    has_pre_code = _html_has_pre_code(body_html)
     review_blocks.insert(
         0,
         {
@@ -76,6 +93,7 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
             "asset_version": escape(rendered_at, quote=True),
             "palette_style": palette_style_block(metadata),
             "mermaid_head": _render_mermaid_head(rendered_at) if has_rendered_mermaid else "",
+            "highlight_head": _render_highlight_head(rendered_at) if has_pre_code else "",
             "body": body_html,
             "toc": _render_toc(model["blocks"]),
         }
@@ -106,6 +124,15 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
         shutil.copyfile(DIAGRAM_ZOOM_JS_PATH, assets_dir / "diagram-zoom.js")
         asset_outputs.append("assets/mermaid.min.js")
         asset_outputs.append("assets/diagram-zoom.js")
+    if has_pre_code:
+        if not HIGHLIGHT_JS_PATH.is_file():
+            raise ValueError(f"highlight.js asset not found: {HIGHLIGHT_JS_PATH}")
+        if not HIGHLIGHT_INIT_JS_PATH.is_file():
+            raise ValueError(f"highlight-init asset not found: {HIGHLIGHT_INIT_JS_PATH}")
+        shutil.copyfile(HIGHLIGHT_JS_PATH, assets_dir / "highlight.min.js")
+        shutil.copyfile(HIGHLIGHT_INIT_JS_PATH, assets_dir / "highlight-init.js")
+        asset_outputs.append("assets/highlight.min.js")
+        asset_outputs.append("assets/highlight-init.js")
 
     manifest = {
         "schema_version": "1.0",
@@ -145,6 +172,15 @@ def _render_mermaid_head(asset_version: str) -> str:
         f'  <script src="assets/mermaid.min.js?v={version}"></script>\n'
         f'  <script data-role="reviewable-mermaid-init">{MERMAID_INIT_JS}</script>\n'
         f'  <script src="assets/diagram-zoom.js?v={version}" defer></script>'
+    )
+
+
+def _render_highlight_head(asset_version: str) -> str:
+    """highlight.js 本体と適用起動 script の tag を組み立てる。"""
+    version = escape(asset_version, quote=True)
+    return (
+        f'  <script src="assets/highlight.min.js?v={version}"></script>\n'
+        f'  <script src="assets/highlight-init.js?v={version}"></script>'
     )
 
 

@@ -80,6 +80,16 @@
   --log-warn-bg: rgba(230,192,116,.07);
   --log-err-bg:  rgba(224,143,168,.09);
 
+  /* Diff 機能色 (pre.diff 専用。palette 上書き対象外)
+   * pre.diff の背景は light / dark とも --code-bg (暗色) のため、
+   * 文字色は暗色地の上で WCAG 4.5:1 以上になる明色を使う (白地向けの濃緑/濃赤は使わない)。 */
+  --diff-add-bg:  rgba(143, 206, 155, .16);
+  --diff-add-ink: #8fce9b;
+  --diff-del-bg:  rgba(224, 143, 168, .14);
+  --diff-del-ink: #e08fa8;
+  --diff-ctx-ink: var(--code-ink-2);
+  --diff-marker:  var(--code-ink-2);
+
   /* Utility colors */
   --ink-inverse: #fff;
   --ink-on-dark: #e7e3da;
@@ -142,6 +152,13 @@
   --code-bg:     #15181d;
   --code-bg-2:   #1b1f25;
   --code-line:   #262b32;
+
+  --diff-add-bg:  rgba(109, 186, 136, .18);
+  --diff-add-ink: #8fce9b;
+  --diff-del-bg:  rgba(224, 143, 168, .16);
+  --diff-del-ink: #e08fa8;
+  --diff-ctx-ink: var(--code-ink-2);
+  --diff-marker:  var(--code-ink-2);
 
   --sh-1: 0 1px 2px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.04);
   --sh-2: 0 2px 8px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05);
@@ -622,6 +639,114 @@ table.cmp td.pick { background: color-mix(in srgb, var(--resolved) 7%, var(--pap
 .tok-s { color: var(--code-green); }
 .tok-c { color: var(--code-ink-2); font-style: italic; }
 .tok-n { color: var(--code-amber); }
+
+/* highlight.js token colors → 既存 --code-* 変数へマップ (外部 theme CSS は同梱しない) */
+.hljs { color: var(--code-ink); background: transparent; }
+.hljs-comment, .hljs-quote { color: var(--code-ink-2); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-addition { color: var(--code-pink); }
+.hljs-number, .hljs-string, .hljs-meta .hljs-meta-string, .hljs-literal,
+.hljs-doctag, .hljs-regexp { color: var(--code-green); }
+.hljs-title, .hljs-section, .hljs-name, .hljs-selector-id, .hljs-selector-class { color: var(--code-blue); }
+.hljs-attribute, .hljs-attr, .hljs-variable, .hljs-template-variable,
+.hljs-class .hljs-title, .hljs-type { color: var(--code-amber); }
+.hljs-symbol, .hljs-bullet, .hljs-subst, .hljs-meta, .hljs-meta .hljs-keyword,
+.hljs-selector-attr, .hljs-selector-pseudo, .hljs-link { color: var(--code-blue); }
+.hljs-built_in, .hljs-deletion { color: var(--code-pink); }
+.hljs-formula { background: var(--code-hl-bg); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+
+/* コード差分 (pre.diff) */
+pre.diff {
+  margin: var(--sp-4) 0;
+  padding: 12px 0;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--code-line);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  overflow-x: auto;
+  white-space: pre;
+}
+pre.diff .add,
+pre.diff .del,
+pre.diff .ctx {
+  display: block;
+  padding: 0 14px 0 28px;
+  position: relative;
+  white-space: pre;
+}
+pre.diff .add { background: var(--diff-add-bg); color: var(--diff-add-ink); }
+pre.diff .del { background: var(--diff-del-bg); color: var(--diff-del-ink); }
+pre.diff .ctx { color: var(--diff-ctx-ink); }
+pre.diff .add::before { content: "+"; position: absolute; left: 10px; color: var(--diff-add-ink); }
+pre.diff .del::before { content: "-"; position: absolute; left: 10px; color: var(--diff-del-ink); }
+pre.diff .ctx::before { content: " "; position: absolute; left: 10px; color: var(--diff-marker); }
+
+/* 用語集 */
+dl.glossary {
+  display: grid;
+  grid-template-columns: minmax(8em, 12em) 1fr;
+  /* 列の境界線は dt の border-right で描くため、gap は 0 にして
+     左右の余白を dt/dd 側の padding で作る */
+  column-gap: 0;
+  row-gap: 0;
+  margin: var(--sp-4) 0 var(--sp-5);
+  padding: var(--pad-card);
+  background: var(--paper-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  font-size: var(--fs-small);
+}
+dl.glossary dt {
+  margin: 0;
+  font-weight: 650;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 10px 14px 10px 0;
+  /* 外枠 (--line-2) より弱い --line-1 で行と列を区切る。最終行は下線なし */
+  border-bottom: 1px solid var(--line-1);
+  border-right: 1px solid var(--line-1);
+}
+dl.glossary dd {
+  margin: 0;
+  color: var(--ink-2);
+  padding: 10px 0 10px 14px;
+  border-bottom: 1px solid var(--line-1);
+}
+dl.glossary dt:last-of-type,
+dl.glossary dd:last-of-type {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+dl.glossary dt:first-of-type,
+dl.glossary dd:first-of-type {
+  padding-top: 0;
+}
+@media (max-width: 640px) {
+  /* 1 カラムでは dt と dd の二重線を避け、定義 (dd) の下だけ区切る */
+  dl.glossary { grid-template-columns: 1fr; }
+  dl.glossary dt {
+    border-bottom: 0;
+    /* 1 カラムでは用語と定義が上下に並ぶため、列の境界線は出さない */
+    border-right: 0;
+    padding: 10px 0 2px;
+  }
+  dl.glossary dd {
+    border-bottom: 1px solid var(--line-1);
+    padding: 0 0 10px;
+    margin-bottom: 4px;
+  }
+  dl.glossary dd:last-of-type {
+    border-bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+}
+
 /* log variant */
 .code.log .code-body { font-size: 12px; }
 .log-line { display: block; padding: 1px 16px; white-space: pre-wrap; word-break: break-word; }
@@ -1232,3 +1357,135 @@ input[type=checkbox][data-task-check] {
 tr.is-checked > td { color: var(--ink-faint); }
 tr.is-checked > td:first-child { color: var(--ink-2); }
 li.is-checked { color: var(--ink-faint); }
+
+/* ---------- PRINT / PDF ----------------------------------- */
+@media print {
+  /*
+   * 表示テーマ (data-theme=dark や OS 暗色) に依存せず、印刷/PDF は常に light 相当の
+   * コントラストにする。html/body に color:#000 を置いても var(--ink) が暗色のまま
+   * だと本文が白地に淡色文字になり読めない (NG-3 / SC-5)。
+   */
+  :root,
+  [data-theme="dark"],
+  [data-theme="light"] {
+    --bg-app:      #efece5;
+    --bg-rail:     #f4f2ec;
+    --paper:       #fdfcf9;
+    --paper-2:     #f7f5f0;
+    --ink:         #232019;
+    --ink-2:       #5f5b51;
+    --ink-3:       #8d887d;
+    --ink-faint:   #b3aea3;
+    --line-1:      #e6e2d8;
+    --line-2:      #d6d1c5;
+    --line-3:      #c4bdae;
+    --brand:       #2f6093;
+    --brand-soft:  #e8eff7;
+    --control-primary: #2f6093;
+    --open:        #2f6fb0;  --open-bg:    #e9f1f9;  --open-line:  #bcd6ee;
+    --reply:       #a9772a;  --reply-bg:   #f7efdc;  --reply-line: #e6cf9b;
+    --resolved:    #3f8a5c;  --resolved-bg:#e9f1ea;  --resolved-line:#bcd9c5;
+    /* code surface は light モードと同じ暗色地 + 明色字 (印刷でもコードは読める) */
+    --code-bg:     #1d2127;
+    --code-bg-2:   #23282f;
+    --code-ink:    #d7d3c8;
+    --code-ink-2:  #8b9099;
+    --code-line:   #2f343c;
+    --code-blue:   #82b4e6;
+    --code-green:  #8fce9b;
+    --code-amber:  #e6c074;
+    --code-pink:   #e08fa8;
+    --code-dot:    #4a4f57;
+    --code-ln:     #565c64;
+    /* print でも pre.diff は暗色 code-bg のため、明色 ink を維持する */
+    --diff-add-bg:  rgba(143, 206, 155, .16);
+    --diff-add-ink: #8fce9b;
+    --diff-del-bg:  rgba(224, 143, 168, .14);
+    --diff-del-ink: #e08fa8;
+    --diff-ctx-ink: var(--code-ink-2);
+    --diff-marker:  var(--code-ink-2);
+  }
+
+  .topbar,
+  .toc,
+  .cmt-rail,
+  .pub-exit,
+  .diagram-zoom-btn,
+  .chip-select,
+  .toolset,
+  .review-comments-utility,
+  .review-update-banner,
+  .review-comments-composer {
+    display: none !important;
+  }
+
+  html, body {
+    background: #fff !important;
+    color: #232019 !important;
+    height: auto;
+    font-size: 11pt;
+  }
+  .app { height: auto; display: block; }
+  .canvas { overflow: visible; height: auto; }
+  .doc-shell { max-width: none; margin: 0; }
+  .doc-grid {
+    display: block;
+    grid-template-columns: 1fr;
+  }
+  .paper {
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    background: #fff !important;
+    color: #232019 !important;
+    padding: 0;
+  }
+  .doc-main { max-width: none; color: inherit; }
+  .prose, .block-content, .doc-title, h1, h2, h3, h4, p, li, td, th, dt, dd {
+    color: inherit;
+  }
+
+
+  table, pre, figure, .callout, .reco, .decision-panel,
+  .code, .summary, .checklist-panel, .block-content {
+    break-inside: avoid;
+  }
+  h1, h2, h3, h4 { break-after: avoid; }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #444;
+    word-break: break-all;
+  }
+
+  /* 横スクロール容器の内容保持 (印刷ではスクロール不可のため) */
+  .table-scroll,
+  .block-content pre,
+  .code-body {
+    overflow-x: visible !important;
+  }
+  table.cmp {
+    min-width: 0 !important;
+  }
+  table.cmp th,
+  table.cmp td {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  table.cmp thead th,
+  table.cmp th.axis,
+  table.cmp td.axis,
+  .block-content th:first-child {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    box-shadow: none !important;
+  }
+  .code-body .ln,
+  .block-content pre,
+  pre.diff {
+    white-space: pre-wrap !important;
+    word-break: break-word;
+  }
+}

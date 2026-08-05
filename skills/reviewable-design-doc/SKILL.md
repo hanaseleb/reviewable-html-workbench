@@ -79,7 +79,9 @@ Follow the language of the latest user request for progress updates, final respo
 | 桁揃え数値 | `num` | `<td><span class="num">1,024</span></td>` (表中の数値列に使う) |
 | 推奨パネル | `reco` / `reco-tag` | `<div class="reco"><span class="reco-tag">推奨</span><p>案 B を採る。理由は…</p></div>` |
 | 決定の枠囲み | `decision-panel` | `<div class="decision-panel"><p>…</p></div>` |
-| コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
+| コード内の着色 (新規は language-* 既定) | `language-*` (自動) / 互換の `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` | 新規: `<pre><code class="language-python">def main():</code></pre>`。手動着色 (互換): `<pre><code><span class="tok-k">def</span> …</code></pre>`。同梱 highlight.js が `language-*` を自動着色する。`tok-*` を含む code / `pre.diff` / `.nohighlight` は自動着色しない |
+| コード差分 | `pre.diff` + `.add` / `.del` / `.ctx` | `<pre class="diff"><span class="ctx"> context</span><span class="del">removed</span><span class="add">added</span></pre>`。変更理由を散文で説明してから、必要な断片だけ示す |
+| 用語集 | `dl.glossary` | `<dl class="glossary"><dt>用語</dt><dd>定義</dd></dl>`。文書冒頭の `html` block に置く。専門用語は本文で使う前に 1〜2 文で定義し、前提用語が多い文書は用語集を置く |
 
 ### 多軸の比較表 (`table.cmp`)
 
@@ -124,7 +126,7 @@ Follow the language of the latest user request for progress updates, final respo
 
 ## Style Classes Available in html Blocks
 
-The bundled `style.css` ships ready-to-use presentation classes for `html` blocks. When the content contains comparisons, ratings, recommendations, or decisions, do not stop at bare `<table>` / `<p>`: use `table-wrap` + `table-cap` (numbered table captions), `axis-sub` (header sub-labels), `rate good|mid|low r1..r5` with five `pip` elements (dot ratings), `tag-yes` / `tag-no` / `tag-cell-note` (availability cells), `num` (tabular figures), `reco` + `reco-tag` (recommendation panel), `decision-panel` (decision box), and `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` (code token coloring). Reference numbered tables from body text as "表 1" / "Table 1". These work by class alone; do not re-implement the same look with inline `style` attributes. Do not emphasize a paragraph by making its type larger — if a paragraph deserves emphasis it is a recommendation, a decision, or a warning, so use `reco`, `decision-panel`, or a `callout` block instead. The document-level intro is `metadata.deck`; do not add a per-section intro paragraph.
+The bundled `style.css` ships ready-to-use presentation classes for `html` blocks. When the content contains comparisons, ratings, recommendations, or decisions, do not stop at bare `<table>` / `<p>`: use `table-wrap` + `table-cap` (numbered table captions), `axis-sub` (header sub-labels), `rate good|mid|low r1..r5` with five `pip` elements (dot ratings), `tag-yes` / `tag-no` / `tag-cell-note` (availability cells), `num` (tabular figures), `reco` + `reco-tag` (recommendation panel), `decision-panel` (decision box), `language-*` on `<pre><code>` for automatic syntax highlighting via bundled highlight.js (default for new docs; keep `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` only for compatibility with manually colored spans), `pre.diff` with `.add` / `.del` / `.ctx` for code diffs (explain the change in prose first, then show only the needed fragment), and `dl.glossary` for term definitions at the top of the document. Automatic highlighting skips `pre.diff`, `.nohighlight`, and any `code` that already has `tok-*` descendants. Reference numbered tables from body text as "表 1" / "Table 1". These work by class alone; do not re-implement the same look with inline `style` attributes. Do not emphasize a paragraph by making its type larger — if a paragraph deserves emphasis it is a recommendation, a decision, or a warning, so use `reco`, `decision-panel`, or a `callout` block instead. The document-level intro is `metadata.deck`; do not add a per-section intro paragraph.
 
 For comparisons with three or more axes, use `<table class="cmp">` inside `table-scroll`: the header row stays sticky while scrolling, `axis` on the first column keeps the comparison axis pinned during horizontal scroll, and `pick` on a `<col>`, `th`, or `td` tints the recommended option's column green. Keep plain `<table>` for narrow two-column comparisons — the sticky behavior and 720px minimum width get in the way there.
 <!-- END SHARED: html-style-classes -->
@@ -139,9 +141,23 @@ For comparisons with three or more axes, use `<table class="cmp">` inside `table
 3. **読む文書と操作する画面で作法を変える。** 一覧・ダッシュボード的な内容は上から順に読まれず走査される。要約を詳細より先に置き、状態は数値だけでなく形 (rate の点、tag-yes の色、callout の左帯) でも符号化して、注意が要る箇所が一目で分かるようにする。
 4. **余白は layout で作る。** 兄弟要素の間隔は `gap` を持つ flex / grid で作り、要素ごとの margin を積まない。幅の広い表・コード・図は自前の `overflow-x: auto` コンテナ (表は `table-scroll`) に入れ、ページ全体を横スクロールさせない。
 
+## 図と手順の表現指針
+
+- **原典図の引用優先。** 原典に重要な図がある場合は出所を明示して引用し、模倣図を作らない。
+- **矢印文字・絵文字を図記号にしない。** 図が要るなら Mermaid diagram block か inline SVG を使う。
+- **直列手順をフローチャート化しない。** 単純な直列手順は番号付きリストで表現する。
+
+## 印刷と PDF
+
+ブラウザの印刷ダイアログ (`@media print`) で topbar / toc / comment rail 等の操作 UI が消え、横スクロールしていた表・コードは折り返して全内容が残る。PDF 化が必要な時だけ `python3 -m scripts.html_review_workbench.cli export-pdf --root <output-dir> [--output <pdf-path>]` を実行する (headless Chrome 必須。不在時は error JSON)。preview URL の提示が既定であり、ユーザーが PDF を明示依頼した時だけ export-pdf する。
+
 ## Design Quality Guidance
 
 When unsure about visual choices, follow four rules; explicit user direction always wins. (1) Avoid stereotypical AI-generated looks — cream (#F4F1EA) with serif display and terracotta accent, near-black with a lone acid-green pop, emoji as section markers, centering everything, uniformly large border radii, accent bars on rounded cards. (2) Structural devices must encode facts: numbered markers (01/02/03) only when the content truly is a sequence; rules, eyebrows, and labels only when they mark real divisions. (3) Documents are read, dashboards are scanned: put summaries before detail and encode state in form (rating dots, tag colors, callout stripes), not numbers alone. (4) Create spacing with `gap` in flex/grid rather than stacked per-element margins, and give wide tables/code/diagrams their own `overflow-x: auto` container (`table-scroll` for tables) so the page body never scrolls sideways.
+
+Diagram and procedure guidance: (a) Prefer citing an original figure with attribution over redrawing it. (b) Do not use arrow characters or emoji as diagram symbols — use a Mermaid diagram block or inline SVG when a figure is needed. (c) Do not turn a simple linear procedure into a flowchart; use a numbered list.
+
+Print and PDF: browser print (`@media print`) hides chrome (topbar, toc, comment rail) and unwraps horizontal-scroll tables/code so content is preserved. Run `export-pdf` only when the user explicitly asks for a PDF (`python3 -m scripts.html_review_workbench.cli export-pdf --root <output-dir>`); preview URLs remain the default. Headless Chrome is required; missing Chrome returns an error JSON (no external service fallback).
 <!-- END SHARED: html-design-guidance -->
 
 <!-- BEGIN SHARED: html-interactive-controls -->

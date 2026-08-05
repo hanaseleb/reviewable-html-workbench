@@ -159,6 +159,7 @@ class ProjectLayoutTest(unittest.TestCase):
                 "watch-comments",
                 "notify-update",
                 "publish",
+                "export-pdf",
             },
         )
         self.assertEqual(cli.COMMAND_CONTRACT["build-model"]["required_options"], ("--output",))
@@ -176,6 +177,8 @@ class ProjectLayoutTest(unittest.TestCase):
         self.assertEqual(cli.COMMAND_CONTRACT["watch-comments"]["required_options"], ("--root",))
         self.assertEqual(cli.COMMAND_CONTRACT["notify-update"]["required_options"], ("--root",))
         self.assertEqual(cli.COMMAND_CONTRACT["publish"]["required_options"], ("--root",))
+        self.assertEqual(cli.COMMAND_CONTRACT["export-pdf"]["required_options"], ("--root",))
+        self.assertEqual(cli.COMMAND_CONTRACT["export-pdf"]["optional_options"], ("--output",))
 
         help_text = cli.build_parser().format_help()
         for command in cli.COMMAND_CONTRACT:

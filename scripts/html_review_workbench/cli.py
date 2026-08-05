@@ -23,6 +23,7 @@ from scripts.html_review_workbench.plan_preview import (
     read_payload as read_plan_preview_payload,
     stop_plan_preview,
 )
+from scripts.html_review_workbench.export_pdf import ExportPdfError, export_pdf as run_export_pdf
 from scripts.html_review_workbench.publish import PublishError, publish_bundle
 from scripts.html_review_workbench.render import render_bundle
 from scripts.html_review_workbench.preview_server import (
@@ -87,6 +88,18 @@ def publish(args: argparse.Namespace) -> int:
     try:
         result = publish_bundle(root, output)
     except (OSError, PublishError) as exc:
+        return _fail(exc)
+    print(json.dumps(result, ensure_ascii=False))
+    return 0
+
+
+def export_pdf_cmd(args: argparse.Namespace) -> int:
+    """rendered bundle の index.html を headless Chrome で PDF 化する。"""
+    root = Path(args.root)
+    output = Path(args.output) if args.output else None
+    try:
+        result = run_export_pdf(root, output)
+    except (OSError, ExportPdfError) as exc:
         return _fail(exc)
     print(json.dumps(result, ensure_ascii=False))
     return 0
@@ -462,6 +475,15 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
             _CommandArg("--output"),
         ),
         publish,
+    ),
+    _CommandSpec(
+        "export-pdf",
+        "Export a rendered bundle index.html to PDF via headless Chrome.",
+        (
+            _CommandArg("--root", required=True),
+            _CommandArg("--output"),
+        ),
+        export_pdf_cmd,
     ),
 )
 

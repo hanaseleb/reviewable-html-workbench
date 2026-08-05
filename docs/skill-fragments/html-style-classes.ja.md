@@ -11,7 +11,9 @@
 | 桁揃え数値 | `num` | `<td><span class="num">1,024</span></td>` (表中の数値列に使う) |
 | 推奨パネル | `reco` / `reco-tag` | `<div class="reco"><span class="reco-tag">推奨</span><p>案 B を採る。理由は…</p></div>` |
 | 決定の枠囲み | `decision-panel` | `<div class="decision-panel"><p>…</p></div>` |
-| コード内の着色 | `tok-k` (keyword) / `tok-f` (function) / `tok-s` (string) / `tok-c` (comment) / `tok-n` (number) | `<pre><code><span class="tok-k">def</span> <span class="tok-f">main</span>():</code></pre>` |
+| コード内の着色 (新規は language-* 既定) | `language-*` (自動) / 互換の `tok-k` / `tok-f` / `tok-s` / `tok-c` / `tok-n` | 新規: `<pre><code class="language-python">def main():</code></pre>`。手動着色 (互換): `<pre><code><span class="tok-k">def</span> …</code></pre>`。同梱 highlight.js が `language-*` を自動着色する。`tok-*` を含む code / `pre.diff` / `.nohighlight` は自動着色しない |
+| コード差分 | `pre.diff` + `.add` / `.del` / `.ctx` | `<pre class="diff"><span class="ctx"> context</span><span class="del">removed</span><span class="add">added</span></pre>`。変更理由を散文で説明してから、必要な断片だけ示す |
+| 用語集 | `dl.glossary` | `<dl class="glossary"><dt>用語</dt><dd>定義</dd></dl>`。文書冒頭の `html` block に置く。専門用語は本文で使う前に 1〜2 文で定義し、前提用語が多い文書は用語集を置く |
 
 ### 多軸の比較表 (`table.cmp`)
 
