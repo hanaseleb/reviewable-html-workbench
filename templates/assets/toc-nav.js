@@ -145,7 +145,10 @@
       '<path d="M3 1l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"' +
       ' stroke-linecap="round" stroke-linejoin="round"/></svg>';
     tab.querySelector(".tt-label").textContent = en ? "TOC" : "目次";
-    document.body.appendChild(tab);
+    // body 直下には置かない。この HTML を iframe に埋め込むホストには body>* へ
+    // width:100%!important を注入するものがあり、body 子だとタブが全幅に潰される。
+    // position:fixed なので canvas 内でも表示位置は変わらない
+    canvas.appendChild(tab);
 
     function hidden() {
       return canvas.classList.contains("is-wide");

@@ -197,6 +197,18 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn("else", block)
         self.assertIn("toast(", block)
 
+    def test_utility_bar_hides_while_typing_comment(self) -> None:
+        """コメント返信を打つとき Export/Import バーが textarea を覆い、入力中の文字が見えない。
+
+        判定基準の出所: 2026-08-05 のユーザー報告 (rail 下部の返信欄に bar が重なった
+        スクリーンショット) と、その修正設計 (rail 内の入力フォーカス中は bar を隠す)。
+        """
+        css = (ROOT / "templates/style.css").read_text(encoding="utf-8")
+        idx = css.index(".cmt-rail textarea:focus")
+        rule = css[idx : css.index("}", idx)]
+        self.assertIn("opacity: 0", rule)
+        self.assertIn("pointer-events: none", rule)
+
     def test_published_i18n_keys_exist(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
         ja_block = script[script.index("ja: {") : script.index("},\n    en: {")]

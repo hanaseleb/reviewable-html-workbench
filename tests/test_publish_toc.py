@@ -157,7 +157,11 @@ class PublishTocTest(unittest.TestCase):
         self.assertIn('classList.toggle("is-wide"', body)
         # タブは開閉共通の 1 つ。開いている間は矢印を反転して見せる
         self.assertIn(".is-published .toc-toggle-tab { display: inline-flex; }", css)
-        self.assertIn(".canvas:not(.is-wide) ~ .toc-toggle-tab .tt-chev", css)
+        self.assertIn(".canvas:not(.is-wide) .toc-toggle-tab .tt-chev", css)
+        # iframe 埋め込みホストには body>* へ width:100%!important を注入するものがあり、
+        # タブは body 直下ではなく canvas 内に置く (2026-08-05 実表示で全幅化を確認)
+        self.assertIn("canvas.appendChild(tab)", body)
+        self.assertNotIn("document.body.appendChild(tab)", body)
 
     def test_document_without_toc_still_publishes(self) -> None:
         """目次を持たない文書でも publish が成立する。

@@ -4,7 +4,7 @@ title: 公開出力の目次をトグルで隠し、本文を全幅表示でき�
 status: Done
 assignee: []
 created_date: '2026-08-05 12:56'
-updated_date: '2026-08-05 13:08'
+updated_date: '2026-08-05 13:29'
 labels:
   - 機能追加
   - publish
@@ -18,11 +18,12 @@ ordinal: 15000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 ## 決定事項
 
-- 公開出力 (publicar 等に置く standalone HTML) の目次に「隠す」ボタンを付け、隠している間は左上の固定「目次」ボタンで戻せるようにする (2026-08-05 ユーザー依頼)
+- 公開出力 (共有先に置く standalone HTML) の目次に開閉トグルを付け、隠している間は本文を全幅表示する (2026-08-05 ユーザー依頼)
 - 表示切替は既存の is-wide class の付け外しで行う (公開出力には目次なし全幅の CSS が既にあるため、layout 追加はしない)
 - 切替時は読んでいた位置がずれないよう、preview と同じ「読点 block 基準の位置補正」を toc-nav.js 側にも実装する
 - 状態は localStorage に保存し、次回も同じ表示で開く。保存が無い場合は書き出し時の状態 (標準/ワイド) に従う
 - 1300px 以下は目次が元々出ないためボタンも出さない。印刷でも出さない
+- トグルは開閉どちらの状態でも左端の同じ位置のタブ 1 つとし、矢印の向きだけで状態を示す (2026-08-05 ユーザー指示)
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -59,9 +60,11 @@ ordinal: 15000
 
 test: test_publish_toc.py に 1 件追加 (309 件 OK)。トグル実装を除去した使い捨て copy で対象 test が落ちることを確認。
 
-注意: 公開済み資料へ反映するには bundle 再 render (assets/toc-nav.js の更新) + publicar 再 deploy が必要。
+注意: 公開済み資料へ反映するには bundle 再 render (assets/toc-nav.js の更新) + 公開先への再 deploy が必要。
 
 2026-08-05 デザイン往復: ユーザー実機確認で 2 回改訂。(1) 浮いた丸ボタン → 左端密着の取っ手型タブ、(2) 隠す/戻す 2 ボタン → 開閉共通の左端固定タブ 1 つ (矢印の向きだけで状態を示す)。最終実測: タブ位置は両状態とも (0,96) で不動、本文幅 1272⇄1536px、位置ずれ 0。ユーザー確認 ok (2026-08-05)。
+
+2026-08-05 追修正: 公開 HTML を iframe に埋め込むホストが iframe 内の body>* へ width:100%!important を注入する環境で、body 直下に置いたタブが全幅の白帯になりタイトルを覆った。タブを canvas 内へ移設して回避 (position:fixed のため表示位置は不変)。該当ホストの注入 CSS を再現した headless 実測でタブ幅 28px・位置 (0,96) 固定・トグル動作を確認し、公開中の 3 本を再 deploy。version 1.26.1。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

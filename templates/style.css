@@ -935,7 +935,7 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .toc-toggle-tab:hover { color: var(--ink); border-color: var(--line-3); }
 .toc-toggle-tab .tt-chev { flex: none; transition: transform .15s ease; }
 /* 目次が出ている間は矢印を左向き (しまう方向) にする */
-.canvas:not(.is-wide) ~ .toc-toggle-tab .tt-chev { transform: rotate(180deg); }
+.canvas:not(.is-wide) .toc-toggle-tab .tt-chev { transform: rotate(180deg); }
 /* 目次が元々出ない狭さではトグルも出さない */
 @media (max-width: 1300px) {
   .is-published .toc-toggle-tab { display: none; }
@@ -1208,6 +1208,13 @@ textarea.cmt-input, input.cmt-input {
   border: 1px solid var(--line-2);
   border-radius: var(--r-md);
   box-shadow: var(--sh-2);
+  transition: opacity .15s ease;
+}
+/* コメントを書いている間は入力中の文字が最優先。fixed のこの bar は rail 下部の
+   返信欄と重なり、入力が bar の下に隠れて見えなくなるため、入力フォーカス中は消す */
+body:has(.cmt-rail textarea:focus, .cmt-rail input:focus, .review-comments-composer textarea:focus) .review-comments-utility {
+  opacity: 0;
+  pointer-events: none;
 }
 .review-comments-status {
   color: var(--ink-3);
