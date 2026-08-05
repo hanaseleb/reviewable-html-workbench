@@ -12,6 +12,7 @@ from typing import Any
 
 from scripts.html_review_workbench import __version__
 from scripts.html_review_workbench.common import (
+    EARLY_THEME_JS,
     MAX_HEADING_LEVEL,
     MERMAID_INIT_JS,
     MIN_HEADING_LEVEL,
@@ -94,6 +95,7 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
             "summary": _render_optional_summary(model.get("summary"), doc_lang),
             "generated_at": escape(model["generated_at"]),
             "asset_version": escape(rendered_at, quote=True),
+            "early_theme_js": EARLY_THEME_JS,
             "palette_style": palette_style_block(metadata),
             "mermaid_head": _render_mermaid_head(rendered_at) if has_rendered_mermaid else "",
             "highlight_head": _render_highlight_head(rendered_at) if has_pre_code else "",

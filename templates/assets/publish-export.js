@@ -1,7 +1,9 @@
 (function () {
   "use strict";
 
-  const MERMAID_INIT_JS = "mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})";
+  // scripts/html_review_workbench/common.py の MERMAID_INIT_JS と同じ内容を保つ
+  // (通常は書き出し元の init script をそのまま引き継ぐので、これは取得できない時の予備)。
+  const MERMAID_INIT_JS = "(function(){function t(){var d=document.documentElement.dataset.theme;if(d!=='dark'&&d!=='light'){d=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}return d==='dark'?'dark':'default';}function boot(){mermaid.initialize({startOnLoad:false,theme:t(),securityLevel:'strict'});}window.__rhwRerenderMermaid=function(){var n=Array.prototype.slice.call(document.querySelectorAll('.mermaid[data-mermaid-source]'));if(!n.length){return Promise.resolve();}n.forEach(function(el){el.removeAttribute('data-processed');el.textContent=el.getAttribute('data-mermaid-source');});boot();return Promise.resolve(mermaid.run({nodes:n})).catch(function(){});};boot();document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.mermaid').forEach(function(el){el.setAttribute('data-mermaid-source',el.textContent);});mermaid.run();if(window.matchMedia){var mq=window.matchMedia('(prefers-color-scheme: dark)');var f=function(){var d=document.documentElement.dataset.theme;if(d==='dark'||d==='light'){return;}window.__rhwRerenderMermaid();};if(mq.addEventListener){mq.addEventListener('change',f);}else if(mq.addListener){mq.addListener(f);}}});})()";
   const DEFAULT_PUBLISH_OVERRIDES =
     "html,body{background:var(--bg-app);}\n" +
     ".canvas{overflow:visible;height:auto;min-height:100vh;}\n" +

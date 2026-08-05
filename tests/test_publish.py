@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.html_review_workbench.common import MERMAID_INIT_JS
 from scripts.html_review_workbench.publish import PublishError, publish_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -208,7 +209,7 @@ class TestPublishBundle(unittest.TestCase):
             '  <link rel="stylesheet" href="assets/style.css?v=test">\n',
             '  <link rel="stylesheet" href="assets/style.css?v=test">\n'
             '  <script src="assets/mermaid.min.js?v=test"></script>\n'
-            "  <script data-role=\"reviewable-mermaid-init\">mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})</script>\n"
+            f'  <script data-role="reviewable-mermaid-init">{MERMAID_INIT_JS}</script>\n'
             '  <script src="assets/diagram-zoom.js?v=test" defer></script>\n',
         )
         html = html.replace(
@@ -223,7 +224,7 @@ class TestPublishBundle(unittest.TestCase):
         content = (self.output_dir / "index.html").read_text(encoding="utf-8")
         self.assertIn("/*! Mermaid test */", content)
         self.assertIn("/*! Diagram zoom test */", content)
-        self.assertIn('<script data-role="reviewable-mermaid-init">mermaid.initialize({startOnLoad: true, theme: \'dark\', securityLevel: \'strict\'})</script>', content)
+        self.assertIn(f'<script data-role="reviewable-mermaid-init">{MERMAID_INIT_JS}</script>', content)
         self.assertIn('<pre class="mermaid">erDiagram', content)
         self.assertNotIn('<script src="assets/mermaid.min.js', content)
         self.assertNotIn('<script src="assets/diagram-zoom.js', content)

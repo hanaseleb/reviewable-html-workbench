@@ -6,6 +6,7 @@ import unittest
 from html import escape
 from pathlib import Path
 
+from scripts.html_review_workbench.common import MERMAID_INIT_JS
 from scripts.html_review_workbench.diagram_planner import plan_diagrams
 from scripts.html_review_workbench.render import _render_toc, render_bundle
 from scripts.html_review_workbench.validate_bundle import validate_bundle
@@ -372,7 +373,7 @@ class RendererBundleTest(unittest.TestCase):
             html = index_path.read_text(encoding="utf-8")
             manifest = json.loads((output_dir / "renderer-manifest.json").read_text(encoding="utf-8"))
             self.assertIn('src="assets/mermaid.min.js?', html)
-            self.assertIn("mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})", html)
+            self.assertIn(MERMAID_INIT_JS, html)
             self.assertTrue((output_dir / "assets" / "mermaid.min.js").is_file())
             self.assertIn("assets/mermaid.min.js", manifest["outputs"]["assets"])
 

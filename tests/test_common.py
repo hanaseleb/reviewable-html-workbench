@@ -9,6 +9,7 @@ from pathlib import Path
 
 from scripts.html_review_workbench.common import (
     MERMAID_INIT_JS,
+    PUBLISH_EXPORT_JS_PATH,
     pid_is_alive,
     resolve_bundle_json_path,
     unique_path,
@@ -83,11 +84,35 @@ class CommonHelpersTest(unittest.TestCase):
         self.assertFalse(pid_is_alive(0))
         self.assertFalse(pid_is_alive(-1))
 
-    def test_mermaid_init_js_matches_existing_inline_script(self) -> None:
-        self.assertEqual(
-            MERMAID_INIT_JS,
-            "mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})",
-        )
+    def test_mermaid_init_js_follows_page_theme(self) -> None:
+        """theme を固定すると、片方の theme で図の文字が紙面と同化して読めなくなる。
+
+        判定基準の出所: 2026-08-05 のユーザー報告 (light 表示で sequence diagram の
+        矢印ラベルが薄すぎて読めない = 紙面 light に theme 'dark' の図が乗っていた) と、
+        その修正設計 (preview は html[data-theme]、data-theme を持たない公開版は
+        prefers-color-scheme を見る)。
+        """
+        self.assertNotIn("theme: 'dark'", MERMAID_INIT_JS)
+        self.assertIn("document.documentElement.dataset.theme", MERMAID_INIT_JS)
+        self.assertIn("prefers-color-scheme: dark", MERMAID_INIT_JS)
+
+    def test_mermaid_init_js_keeps_source_for_rerender(self) -> None:
+        """source を退避しないと theme 切替後に描き直せず、図だけ前の theme で固まる。
+
+        判定基準の出所: 上と同じ修正設計 (描画で .mermaid の中身が SVG に置換されるため、
+        描画前に data-mermaid-source へ退避し、切替時に書き戻して run する)。
+        """
+        self.assertIn("data-mermaid-source", MERMAID_INIT_JS)
+        self.assertIn("__rhwRerenderMermaid", MERMAID_INIT_JS)
+
+    def test_publish_export_js_mermaid_init_matches_common(self) -> None:
+        """予備定数がずれると、init script を拾えない経路で書き出した公開版だけ theme が固定される。
+
+        判定基準の出所: publish-export.js の collectMermaidInitScript が
+        「既存 init script が取れなければこの定数を使う」実装であること。
+        """
+        source = PUBLISH_EXPORT_JS_PATH.read_text(encoding="utf-8")
+        self.assertIn(MERMAID_INIT_JS, source)
 
 
 if __name__ == "__main__":

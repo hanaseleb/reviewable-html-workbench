@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
   <link rel="stylesheet" href="assets/style.css?v={{ asset_version }}">
+  <!-- Mermaid の初期化が data-theme を読むため、theme の確定はこの位置より後にできない -->
+  <script data-role="reviewable-early-theme">{{ early_theme_js }}</script>
 {{ palette_style }}
 {{ mermaid_head }}
 {{ highlight_head }}

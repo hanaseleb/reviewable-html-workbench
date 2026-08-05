@@ -1079,14 +1079,17 @@
     });
   }
 
+  // theme 切替に Mermaid を追従させる。描き直しの実体は mermaid init script 側にあり
+  // (公開版にも同じ処理が要るため)、ここは切替後の呼び出しとカード再配置だけを持つ。
+  function rerenderMermaid() {
+    if (typeof window.__rhwRerenderMermaid !== "function") { return; }
+    Promise.resolve(window.__rhwRerenderMermaid()).then(schedulePositionCards, () => {});
+  }
+
   function initThemeToggle() {
+    // 保存済み theme の反映は head の early-theme script が済ませている
+    // (Mermaid の初期化より前に確定させる必要があるため)。
     const button = document.getElementById("themeToggle");
-    const saved = safeLocalStorageGet(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") {
-      document.documentElement.dataset.theme = saved;
-    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      document.documentElement.dataset.theme = "dark";
-    }
     if (!button) {
       return;
     }
@@ -1103,6 +1106,7 @@
       if (label) {
         label.textContent = next === "dark" ? "Light" : "Dark";
       }
+      rerenderMermaid();
       schedulePositionCards();
     });
   }

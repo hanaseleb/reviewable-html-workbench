@@ -13,7 +13,50 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMENTS_SCHEMA_PATH = REPO_ROOT / "schemas" / "comments.schema.json"
-MERMAID_INIT_JS = "mermaid.initialize({startOnLoad: true, theme: 'dark', securityLevel: 'strict'})"
+# theme (light / dark) を body 描画前に確定させる。Mermaid が初期化時の theme を SVG へ
+# 焼き込むため、保存済み theme の反映を DOMContentLoaded 後にすると図だけ逆の theme で固まる。
+EARLY_THEME_JS = (
+    "(function(){"
+    "try{var s=localStorage.getItem('reviewable-theme');"
+    "if(s==='light'||s==='dark'){document.documentElement.dataset.theme=s;return;}}catch(e){}"
+    "if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)"
+    "{document.documentElement.dataset.theme='dark';}"
+    "})()"
+)
+
+# Mermaid の theme は紙面の theme に合わせる。固定すると片方の theme で図の文字が紙と同化する。
+# 判定は preview (html[data-theme]) と公開版 (data-theme を持たず prefers-color-scheme 追従) の
+# 両方を見る。startOnLoad を切って自前で run するのは、描画で失われる source を先に退避するため
+# (theme 切替時の描き直しに元テキストが要る)。
+MERMAID_INIT_JS = (
+    "(function(){"
+    "function t(){"
+    "var d=document.documentElement.dataset.theme;"
+    "if(d!=='dark'&&d!=='light'){"
+    "d=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}"
+    "return d==='dark'?'dark':'default';}"
+    "function boot(){mermaid.initialize({startOnLoad:false,theme:t(),securityLevel:'strict'});}"
+    "window.__rhwRerenderMermaid=function(){"
+    "var n=Array.prototype.slice.call(document.querySelectorAll('.mermaid[data-mermaid-source]'));"
+    "if(!n.length){return Promise.resolve();}"
+    "n.forEach(function(el){el.removeAttribute('data-processed');"
+    "el.textContent=el.getAttribute('data-mermaid-source');});"
+    "boot();"
+    "return Promise.resolve(mermaid.run({nodes:n})).catch(function(){});};"
+    "boot();"
+    "document.addEventListener('DOMContentLoaded',function(){"
+    "document.querySelectorAll('.mermaid').forEach(function(el){"
+    "el.setAttribute('data-mermaid-source',el.textContent);});"
+    "mermaid.run();"
+    "if(window.matchMedia){"
+    "var mq=window.matchMedia('(prefers-color-scheme: dark)');"
+    "var f=function(){var d=document.documentElement.dataset.theme;"
+    "if(d==='dark'||d==='light'){return;}window.__rhwRerenderMermaid();};"
+    "if(mq.addEventListener){mq.addEventListener('change',f);}"
+    "else if(mq.addListener){mq.addListener(f);}}"
+    "});"
+    "})()"
+)
 PUBLISH_EXPORT_JS_PATH = REPO_ROOT / "templates" / "assets" / "publish-export.js"
 PUBLISH_OVERRIDES_CSS_PATH = REPO_ROOT / "templates" / "assets" / "publish-overrides.css"
 TASK_CHECKLIST_JS_PATH = REPO_ROOT / "templates" / "assets" / "task-checklist.js"
