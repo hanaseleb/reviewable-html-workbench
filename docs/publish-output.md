@@ -81,6 +81,7 @@ render 済みバンドルに以下が必要:
 | 幅状態 | 入力の `<main class="canvas is-wide">` があれば `is-wide` クラスを保持 (公開プレビューの最大化) |
 | `<h1 class="doc-title">` | 文書タイトルとして `<title>` と OG/Twitter メタタグに反映 |
 | 本文コンテンツ | `<article class="doc-main">` 内の全コンテンツ（下記の除去対象を除く） |
+| `<nav class="toc">` | 目次。本文と同じ `doc-grid` の先頭に置く。見出しは JS が無くても読めるよう、`lang` に応じて「目次」/「Contents」を埋める。最大化 (`is-wide`) では CSS 側で隠れる |
 
 ## 除去するもの
 
@@ -108,7 +109,6 @@ render 済みバンドルに以下が必要:
 | 要素 | 用途（入力側） |
 |------|--------------|
 | `<header class="topbar">` | ツールバー（フィルタ・テーマ切替等） |
-| `<nav class="toc">` | 目次 |
 | `<aside class="cmt-rail">` | コメントレール |
 | `<div class="pub-exit">` | 公開プレビューモード操作バー |
 | `<script src="...">` | review-comments.js |

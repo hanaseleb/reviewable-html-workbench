@@ -146,8 +146,14 @@ class TestPublishBundle(unittest.TestCase):
         self.assertIn("<style>", content)
         self.assertNotIn('<link rel="stylesheet"', content)
 
-        # script タグがないこと
-        self.assertNotIn("<script", body_content)
+        # レビュー用の runtime が入らないこと。目次を出す文書には目次操作の script が
+        # 入るため「script が 1 つも無い」ではなく、レビュー側だけが無いことを見る。
+        # 判定には review-comments.js 固有の識別子を使う (「review-comments」の語だけだと
+        # 目次 script の説明 comment にも当たってしまう)
+        self.assertNotIn("<script src=", body_content)
+        self.assertNotIn("initPanelToggles", body_content)
+        self.assertNotIn("data-comments-toolbar", body_content)
+        self.assertNotIn("cmt-rail", body_content)
 
     def test_output_is_single_file(self) -> None:
         publish_bundle(self.bundle_dir, self.output_dir)

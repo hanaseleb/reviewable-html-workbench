@@ -158,7 +158,11 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn('document.body.classList.contains("is-published")', script)
         self.assertIn("window.reviewableWorkbenchPublish.downloadPublishedDoc({ toastMessage: t.publishToast });", script)
         self.assertIn('document.querySelector("#canvas .doc-shell")', publish_script)
-        self.assertIn('clone.querySelectorAll(".toc, .cmt-rail, .doc-status, .byline, .cx-num")', publish_script)
+        # 書き出しで外すのはレビュー用の表示だけ。目次は読み手のために残す
+        for removed in (".cmt-rail", ".doc-status", ".byline", ".cx-num", ".review-comment-badges"):
+            self.assertIn(removed, publish_script, f"{removed} を書き出しから外していない")
+        self.assertNotIn('querySelectorAll(".toc,', publish_script)
+        self.assertIn('clone.querySelector(".toc")', publish_script)
         self.assertIn('clone.querySelectorAll(".cx")', publish_script)
         self.assertIn('clone.querySelectorAll(".review-comment-highlight")', publish_script)
         self.assertIn('clone.querySelectorAll(".review-comment-badge")', publish_script)

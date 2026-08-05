@@ -146,7 +146,9 @@
     }
     const clone = shell.cloneNode(true);
 
-    clone.querySelectorAll(".toc, .cmt-rail, .doc-status, .byline, .cx-num").forEach((node) => node.remove());
+    // 目次は残す (公開出力でも読み手が節を辿れるようにするため)。
+    // コメント rail とレビュー用の表示だけを外す
+    clone.querySelectorAll(".cmt-rail, .doc-status, .byline, .cx-num, .review-comment-badges").forEach((node) => node.remove());
 
     clone.querySelectorAll(".cx").forEach((element) => {
       const parent = element.parentNode;
@@ -208,6 +210,15 @@
     const css = await collectCSS();
     const publishOverrides = await fetchAssetText("assets/publish-overrides.css") || DEFAULT_PUBLISH_OVERRIDES;
     const mermaidScripts = await collectMermaidScripts(clone);
+    // 目次を残した出力には、移動と現在位置ハイライトの script を添える。
+    // これが無いと目次は「リンクは飛ぶがハイライトが動かない」状態になる
+    let tocNavScript = "";
+    if (clone.querySelector(".toc")) {
+      const tocNav = await fetchAssetText("assets/toc-nav.js");
+      if (tocNav) {
+        tocNavScript = "<script>\n" + tocNav + "\n</script>\n";
+      }
+    }
     const html =
       "<!DOCTYPE html>\n<html lang=\"" + docLang + "\" data-density=\"" + density + "\">\n" +
       "<head>\n<meta charset=\"utf-8\">\n" +
@@ -227,7 +238,7 @@
       "</head>\n" +
       "<body class=\"is-published\">\n" +
       "<main class=\"canvas" + (isWide ? " is-wide" : "") + "\">\n" +
-      clone.outerHTML + "\n</main>\n</body>\n</html>\n";
+      clone.outerHTML + "\n</main>\n" + tocNavScript + "</body>\n</html>\n";
     return { html, title };
   }
 

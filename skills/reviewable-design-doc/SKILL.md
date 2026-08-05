@@ -58,6 +58,7 @@ Follow the language of the latest user request for progress updates, final respo
 <!-- END SHARED: md-file-prohibition -->
 - 設計資料の本文は、見出し記号を含む原稿ではなく、`blocks[].title`, `blocks[].type`, `blocks[].heading_level`, `blocks[].content`, `review_required` を持つ文書モデルとして表現する。
 - 大区分のブロック（背景・要求、アーキテクチャ、代替案比較、意思決定、未決事項など）には `heading_level: 2` を設定し、その配下の詳細ブロックには `heading_level: 3` を使う。各章の冒頭にはその章で扱う内容を示す導入段落を置く。
+- `title` に章番号を書かない。番号は renderer が `heading_level` と blocks の並びから自動で振るため、`"3. 代替案の比較"` と書くと本文でも目次でも番号が二重になる。順序と階層は blocks の並びと `heading_level` で表す。
 - 比較・代替案・評価軸は `html` block内の `<table>`、手順は `<ol>`、並列項目は `<ul>`、操作例・ログ・コマンドは `<pre><code>`、処理・依存・構成はdiagramブロック、決定・前提・注意はplain textのcallout、レビューしてほしい論点は専用のレビュー観点blockにする。
 - `section`, `text`, `table` block typeは現行rendererに専用描画がないため、最終モデルでは使わない。
 - diagramブロックはMermaid sourceを構造保存用に残し、生成画像を主表示にする。生成画像が未添付の場合、全diagram kindを同梱 mermaid.js でブラウザ描画し、standalone publishでは mermaid.js と図の拡大用scriptをHTMLへinline化する。Mermaid v11系の記法に準拠してsourceを書く。sourceに無い関係や判断を画像側で追加しない。
@@ -316,7 +317,7 @@ Use Mermaid source supported by mermaid.js v11. The bundled `mermaid.min.js` ren
 
 ## Design Document Model Rules
 
-This skill does not convert a `.md` draft into HTML. It designs a reviewable HTML bundle from the beginning. Store new models under `output/tmp/<purpose>/document-model.json` or `output/<YYYY-MM-DD>_<name>/document-model.json`. If temporary natural-language input must be saved, use plain text filenames such as `source.txt`, `input.txt`, or `source-content.txt`. Use `heading_level: 2` for major sections and `heading_level: 3` for detailed subsections. Represent comparisons with tables, steps with ordered lists, parallel items with lists, commands and logs with code blocks, flows and dependencies with diagrams, and decisions or cautions with callouts.
+This skill does not convert a `.md` draft into HTML. It designs a reviewable HTML bundle from the beginning. Store new models under `output/tmp/<purpose>/document-model.json` or `output/<YYYY-MM-DD>_<name>/document-model.json`. If temporary natural-language input must be saved, use plain text filenames such as `source.txt`, `input.txt`, or `source-content.txt`. Use `heading_level: 2` for major sections and `heading_level: 3` for detailed subsections. Never put chapter numbers in `title`: the renderer numbers headings automatically from `heading_level` and block order, so `"3. Comparing alternatives"` ends up doubled in both the body and the table of contents. Represent comparisons with tables, steps with ordered lists, parallel items with lists, commands and logs with code blocks, flows and dependencies with diagrams, and decisions or cautions with callouts.
 
 ## レビューコメントへの対応
 

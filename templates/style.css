@@ -249,6 +249,22 @@ body {
 .toc li a:hover { color: var(--ink); }
 .toc li a.current { color: var(--ink); border-left-color: var(--brand); font-weight: 600; }
 .toc-list > li.toc-h2 { font-weight: 600; margin-top: var(--sp-2); }
+/* 章 (第 1 階層) には本文と同じ番号を付ける。節・項は本文側だけで採番し、目次では省く。
+   本文の autonum とは別の counter だが、どちらも block の並び順で進むので値は一致する */
+.toc-list { counter-reset: toc-h2; }
+.toc-list > li.toc-h2 { counter-increment: toc-h2; }
+.toc-list > li.toc-h2 > a {
+  /* 既定の space-between だと、番号 (::before) とタイトルが両端に離れてしまう */
+  justify-content: flex-start;
+  gap: 6px;
+}
+.toc-list > li.toc-h2 > a::before {
+  content: counter(toc-h2) ".";
+  font-family: var(--font-mono); font-weight: 600; color: var(--ink-3); flex: none;
+}
+/* 見出しを持たない章 (下位項目だけを収める入れ物) は採番しない。
+   本文側も同じ block が無いので、飛ばさないと以降の番号がずれる */
+.toc-list > li.toc-h2:not(:has(> a)) { counter-increment: none; }
 .toc-list > li.toc-h2 > ol { font-weight: 400; margin-left: var(--sp-3); font-size: 0.9em; }
 /* 項 (heading_level 4) の階層 */
 .toc-list > li.toc-h2 > ol > li > ol { margin-left: var(--sp-3); font-size: 0.94em; }
@@ -352,19 +368,21 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
    block の title でも content 内の小見出しでも、h4 は同じ counter を進める */
 .prose.autonum .review-block > h4, .prose.autonum .block-content h4 { counter-increment: h4; }
 .prose.autonum .sec-no, .prose.autonum .sub-sec-no { display: none; }
+/* 番号は見出しと同じ大きさで並べる (font-size: inherit)。以前は 15px / 13px に固定していて、
+   見出しより小さく浮いて見えていた */
 .prose.autonum .review-block > h2::before {
   content: counter(h2) ".";
-  font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--brand);
+  font-family: var(--font-mono); font-size: inherit; font-weight: 600; color: var(--brand);
   margin-right: 12px; letter-spacing: 0;
 }
 .prose.autonum .review-block > h3::before {
   content: counter(h2) "." counter(h3);
-  font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: inherit; font-weight: 500; color: var(--ink-2);
   margin-right: 9px; letter-spacing: 0;
 }
 .prose.autonum .review-block > h4::before, .prose.autonum .block-content h4::before {
   content: counter(h2) "." counter(h3) "." counter(h4);
-  font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--ink-3);
+  font-family: var(--font-mono); font-size: inherit; font-weight: 600; color: var(--ink-3);
   margin-right: 8px; letter-spacing: 0;
 }
 .prose p { margin: 0; max-width: none; text-wrap: pretty; }
@@ -883,9 +901,13 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 /* 既定は 3 カラム (232 / 1fr / 332)。隠した列の幅は本文が吸収する。doc-shell max-width は 1600px のまま */
 .canvas.hide-toc .toc { display: none; }
 .canvas.hide-comments .cmt-rail { display: none; }
-.canvas.hide-toc .doc-grid { grid-template-columns: minmax(0, 1fr) 332px; }
-.canvas.hide-comments .doc-grid { grid-template-columns: 232px minmax(0, 1fr); }
-.canvas.hide-toc.hide-comments .doc-grid { grid-template-columns: minmax(0, 1fr); }
+/* 列の出し入れは 3 カラムを保てる幅でだけ行う。狭い画面では下の RESPONSIVE 節が畳むので、
+   ここで固定幅の列を指定し続けると詳細度で勝ってしまい本文が潰れる */
+@media (min-width: 1301px) {
+  .canvas.hide-toc .doc-grid { grid-template-columns: minmax(0, 1fr) 332px; }
+  .canvas.hide-comments .doc-grid { grid-template-columns: 232px minmax(0, 1fr); }
+  .canvas.hide-toc.hide-comments .doc-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .canvas.hide-comments .cx { background: transparent; border-bottom: 0; cursor: default; }
 .canvas.hide-comments .cx .cx-num { display: none; }
 /* ハイライトを付けられなかったコメントのバッジも、コメントを隠す間は出さない */
@@ -897,19 +919,21 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 
 /* 公開プレビューモード: トップバー・目次・コメントレール非表示、1カラム化 */
 .is-published .topbar { display: none; }
+/* 標準表示では目次を残し、読み手が節を辿れるようにする。コメント rail は公開資料に出さない。
+   目次が無い出力 (block に title が無い文書、旧版のブラウザ書き出し) では 1 カラムに戻す。
+   2 カラムのままだと本文が 1 列目の 232px に押し込まれて潰れる */
 .is-published .doc-grid { grid-template-columns: minmax(0, 1fr); }
-.is-published .toc, .is-published .cmt-rail { display: none; }
-.is-published .doc-shell { max-width: 1180px; padding-top: var(--sp-7); }
+.is-published .doc-grid:has(> .toc) { grid-template-columns: 232px minmax(0, 1fr); }
+.is-published .cmt-rail { display: none; }
+/* 最大化では本文を最大幅で読ませるため目次も隠す */
+.is-published .canvas.is-wide .doc-grid { grid-template-columns: minmax(0, 1fr); }
+.is-published .canvas.is-wide .toc { display: none; }
+/* 幅は preview と同じ 1600px にする。公開だけ 1180px に絞ると、広い画面で左右に大きな余白が
+   でき、表やコードが不要に切り詰められる。標準と最大化の差は目次の有無で付ける */
+.is-published .doc-shell { max-width: 1600px; padding-top: var(--sp-7); }
 .is-published .paper { padding: var(--sp-7) clamp(28px, 5vw, 64px) var(--sp-8); }
 .is-published .prose p, .is-published .prose ul, .is-published .prose ol,
 .is-published .doc-deck { max-width: none; }
-
-/* 公開プレビュー内の紙幅切替。preview 側の目次 / コメントの表示切替とは別の状態として持つ */
-.is-published .canvas.is-wide .doc-shell { max-width: 1480px; }
-.is-published .canvas.is-wide .prose p,
-.is-published .canvas.is-wide .prose ul,
-.is-published .canvas.is-wide .prose ol,
-.is-published .canvas.is-wide .doc-deck { max-width: none; }
 
 /* 大きなブロックも幅制限解除 */
 .is-published .table-wrap, .is-published .code, .is-published .figure,
@@ -1062,14 +1086,25 @@ textarea.cmt-input, input.cmt-input {
 .cmt-empty { color: var(--ink-faint); font-size: var(--fs-small); padding: var(--sp-4); border: 1px dashed var(--line-2); border-radius: var(--r-md); text-align: center; }
 
 /* ---------- 17. RESPONSIVE -------------------------------- */
-@media (max-width: 1024px) {
-  .doc-grid { grid-template-columns: minmax(0,1fr) 320px; }
-  .toc { display: none; }
+/* 目次 232px と comment rail 332px は固定幅なので、画面が狭いと本文列だけが潰れる。
+   本文がおよそ 600px を切る前に、外側の列から順に畳む。
+   閾値の根拠 — 3 カラム: 232 + 600 + 332 + gap 64 + padding 64 = 1292px、
+   2 カラム (本文 + rail): 600 + 332 + gap 32 + padding 64 = 1028px。
+   セレクタに .canvas を足しているのは、表示切替 (.canvas.hide-toc 等) や公開モード
+   (.is-published) の列指定より詳細度を上げて確実に畳むため */
+@media (max-width: 1300px) {
+  .canvas .doc-grid { grid-template-columns: minmax(0,1fr) 320px; }
+  .canvas .toc { display: none; }
+  /* comment rail が出ない状態 — コメントを隠している間と、rail を持たない公開モード —
+     では 2 列目を残さない。残すと本文の右に空の列がそのまま余白として見える */
+  .canvas.hide-comments .doc-grid,
+  .is-published .canvas .doc-grid { grid-template-columns: minmax(0,1fr); }
 }
-@media (max-width: 900px) {
+@media (max-width: 1040px) {
   .doc-shell { padding: var(--sp-5) var(--sp-4) var(--sp-7); }
-  .doc-grid { grid-template-columns: minmax(0,1fr); }
-  .cmt-rail { display: none; }
+  .canvas .doc-grid,
+  .is-published .canvas .doc-grid { grid-template-columns: minmax(0,1fr); }
+  .canvas .cmt-rail { display: none; }
   .paper { padding: var(--sp-5) var(--sp-4) var(--sp-6); }
 }
 

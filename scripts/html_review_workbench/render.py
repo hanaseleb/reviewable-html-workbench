@@ -35,6 +35,7 @@ MERMAID_JS_PATH = ROOT / "templates" / "assets" / "mermaid.min.js"
 DIAGRAM_ZOOM_JS_PATH = ROOT / "templates" / "assets" / "diagram-zoom.js"
 TASK_CHECKLIST_JS_PATH = ROOT / "templates" / "assets" / "task-checklist.js"
 INTERACTIVE_STATE_JS_PATH = ROOT / "templates" / "assets" / "interactive-state.js"
+TOC_NAV_JS_PATH = ROOT / "templates" / "assets" / "toc-nav.js"
 HIGHLIGHT_JS_PATH = ROOT / "templates" / "assets" / "highlight.min.js"
 HIGHLIGHT_INIT_JS_PATH = ROOT / "templates" / "assets" / "highlight-init.js"
 
@@ -109,6 +110,9 @@ def render_bundle(model_path: Path, output_dir: Path) -> Path:
     shutil.copyfile(COMMENTS_JS_PATH, assets_dir / "review-comments.js")
     shutil.copyfile(TASK_CHECKLIST_JS_PATH, assets_dir / "task-checklist.js")
     shutil.copyfile(INTERACTIVE_STATE_JS_PATH, assets_dir / "interactive-state.js")
+    # publish で inline する目次 script。preview 側では review-comments.js が同じ処理を持つので
+    # HTML からは読み込まないが、bundle には置いて publish が拾えるようにする
+    shutil.copyfile(TOC_NAV_JS_PATH, assets_dir / "toc-nav.js")
     asset_outputs = [
         "assets/style.css",
         "assets/publish-overrides.css",

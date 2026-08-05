@@ -18,6 +18,7 @@ PUBLISH_EXPORT_JS_PATH = REPO_ROOT / "templates" / "assets" / "publish-export.js
 PUBLISH_OVERRIDES_CSS_PATH = REPO_ROOT / "templates" / "assets" / "publish-overrides.css"
 TASK_CHECKLIST_JS_PATH = REPO_ROOT / "templates" / "assets" / "task-checklist.js"
 INTERACTIVE_STATE_JS_PATH = REPO_ROOT / "templates" / "assets" / "interactive-state.js"
+TOC_NAV_JS_PATH = REPO_ROOT / "templates" / "assets" / "toc-nav.js"
 
 # block の title を出す見出しの階層。2 = 章、3 = 節、4 = 項。
 # h1 は文書タイトル専用、h5 以下は content 内の小見出しに残す。
