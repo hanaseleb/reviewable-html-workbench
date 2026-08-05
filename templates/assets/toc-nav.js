@@ -16,6 +16,8 @@
   // 現在位置とみなす判定線 (可視領域上端からの距離)。JUMP_OFFSET より少し下に置き、
   // 飛んだ直後にその節が現在位置として光るようにする。
   var CURRENT_LINE = 48;
+  // 目次の表示状態の保存先。公開出力を次に開いたとき同じ表示で始める
+  var HIDE_TOC_KEY = "reviewable-published-hide-toc";
 
   function scrollTarget() {
     var canvas = document.querySelector(".canvas");
@@ -100,6 +102,8 @@
     window.addEventListener("resize", update);
     update();
 
+    initTocToggle(toc, blocks, update);
+
     // 目次が長いとき、目次の中だけをスクロールさせる (本文を巻き込まない)
     var list = toc.querySelector("ol.toc-list");
     if (list) {
@@ -120,6 +124,86 @@
         { passive: false }
       );
     }
+  }
+
+  // 目次の表示トグル。canvas の is-wide class を付け外しするだけで、
+  // 目次の非表示と本文の全幅化は既存の公開出力 CSS が行う。
+  // タブは開閉どちらの状態でも左端の同じ位置に置き、矢印の向きだけで状態を示す
+  function initTocToggle(toc, blocks, update) {
+    var canvas = document.querySelector(".canvas");
+    if (!canvas) {
+      return;
+    }
+    var en = (document.documentElement.lang || "ja").toLowerCase().indexOf("en") === 0;
+
+    var tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "toc-toggle-tab";
+    tab.innerHTML =
+      '<span class="tt-label"></span>' +
+      '<svg class="tt-chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">' +
+      '<path d="M3 1l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"' +
+      ' stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    tab.querySelector(".tt-label").textContent = en ? "TOC" : "目次";
+    document.body.appendChild(tab);
+
+    function hidden() {
+      return canvas.classList.contains("is-wide");
+    }
+
+    function syncA11y() {
+      tab.setAttribute("aria-expanded", hidden() ? "false" : "true");
+      tab.setAttribute(
+        "aria-label",
+        hidden()
+          ? (en ? "Show table of contents" : "目次を表示")
+          : (en ? "Hide table of contents" : "目次を隠す")
+      );
+    }
+
+    // 本文の幅が変わると行の折り返しが変わり縦位置がずれるので、
+    // 読んでいた block (現在位置判定と同じ基準で選ぶ) を切替の前後で同じ画面位置に保つ
+    function keepReadingPosition(mutate) {
+      var target = scrollTarget();
+      var top = viewportTop(target);
+      var anchor = null;
+      for (var i = 0; i < blocks.length; i++) {
+        if (blocks[i].getBoundingClientRect().top <= top + CURRENT_LINE) {
+          anchor = blocks[i];
+        }
+      }
+      if (!anchor) {
+        mutate();
+        return;
+      }
+      var before = anchor.getBoundingClientRect().top;
+      mutate();
+      target.scrollTop += anchor.getBoundingClientRect().top - before;
+    }
+
+    tab.addEventListener("click", function () {
+      var toHidden = !hidden();
+      keepReadingPosition(function () {
+        canvas.classList.toggle("is-wide", toHidden);
+      });
+      try {
+        localStorage.setItem(HIDE_TOC_KEY, toHidden ? "1" : "0");
+      } catch (e) { /* 保存できなくても表示は切り替える */ }
+      syncA11y();
+      if (!toHidden) {
+        update();
+      }
+    });
+
+    // 保存済みの表示状態を復元する。無ければ書き出し時の状態 (標準 / ワイド) のまま
+    var saved = null;
+    try {
+      saved = localStorage.getItem(HIDE_TOC_KEY);
+    } catch (e) { /* 読めない環境では書き出し時の状態を使う */ }
+    if (saved === "1" || saved === "0") {
+      canvas.classList.toggle("is-wide", saved === "1");
+    }
+    syncA11y();
   }
 
   if (document.readyState === "loading") {

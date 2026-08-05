@@ -397,18 +397,6 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
 .prose ul, .prose ol { margin: 0; padding-left: 22px; max-width: none; }
 .prose li + li { margin-top: 6px; }
 .prose strong { font-weight: 650; }
-.prose p:has(> strong:only-child) {
-  font-weight: 580;
-  line-height: 1.82;
-}
-.prose p:has(> strong:only-child) strong {
-  font-weight: inherit;
-}
-.block-content > p:has(> strong:only-child) {
-  border-left: 3px solid var(--line-2);
-  padding-left: var(--sp-4);
-  margin-top: var(--sp-4);
-}
 .prose code:not(pre code) {
   font-family: var(--font-mono); font-size: .86em; background: var(--paper-2);
   border: 1px solid var(--line-1); border-radius: var(--r-xs); padding: 1px 5px;
@@ -931,6 +919,27 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 /* 最大化では本文を最大幅で読ませるため目次も隠す */
 .is-published .canvas.is-wide .doc-grid { grid-template-columns: minmax(0, 1fr); }
 .is-published .canvas.is-wide .toc { display: none; }
+
+/* 公開出力の目次トグル (toc-nav.js が生成)。is-wide の付け外しだけで切り替える。
+   タブは開閉どちらの状態でも左端の同じ位置に置き、矢印の向きだけで状態を示す */
+.toc-toggle-tab {
+  display: none; position: fixed; top: 96px; left: 0; z-index: 80;
+  align-items: center; gap: 6px;
+  writing-mode: vertical-rl; letter-spacing: .18em;
+  background: var(--paper); color: var(--ink-3); border: 1px solid var(--line-2);
+  border-left: none; border-radius: 0 var(--r-md) var(--r-md) 0;
+  padding: 10px 5px; font: inherit; font-size: 11px;
+  cursor: pointer; box-shadow: var(--sh-1);
+}
+.is-published .toc-toggle-tab { display: inline-flex; }
+.toc-toggle-tab:hover { color: var(--ink); border-color: var(--line-3); }
+.toc-toggle-tab .tt-chev { flex: none; transition: transform .15s ease; }
+/* 目次が出ている間は矢印を左向き (しまう方向) にする */
+.canvas:not(.is-wide) ~ .toc-toggle-tab .tt-chev { transform: rotate(180deg); }
+/* 目次が元々出ない狭さではトグルも出さない */
+@media (max-width: 1300px) {
+  .is-published .toc-toggle-tab { display: none; }
+}
 /* 幅は preview と同じ 1600px にする。公開だけ 1180px に絞ると、広い画面で左右に大きな余白が
    でき、表やコードが不要に切り詰められる。標準と最大化の差は目次の有無で付ける */
 .is-published .doc-shell { max-width: 1600px; padding-top: var(--sp-7); }
@@ -1468,6 +1477,7 @@ li.is-checked { color: var(--ink-faint); }
   .toc,
   .cmt-rail,
   .pub-exit,
+  .toc-toggle-tab,
   .diagram-zoom-btn,
   .chip-select,
   .toolset,

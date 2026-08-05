@@ -135,6 +135,30 @@ class PublishTocTest(unittest.TestCase):
         self.assertNotIn("cmt-rail", body)
         self.assertNotIn("cmtLayer", body)
 
+    def test_standalone_toc_toggle_is_wired(self) -> None:
+        """公開出力で「目次を隠して本文を全幅で読む」手段が失われたら落ちる。
+
+        判定基準の出所: TASK-15 の受入基準 (目次を隠すと本文が全幅になる / 戻せる /
+        切替は既存の is-wide class で行う) と、2026-08-05 のユーザー指示
+        「目次ボタンは閉じたときも開いたときも同じ場所」(左端固定タブ 1 つに一本化)。
+        toc-nav.js は publish が standalone に inline するので、その中身を検査する。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "bundle"
+            out = Path(tmp) / "out"
+            _bundle(src, toc_html=TOC_WITH_ITEMS)
+            publish_bundle(src, out)
+            html = (out / "index.html").read_text(encoding="utf-8")
+
+        css, body = html.split("</style>", 1)
+        for marker in ("toc-toggle-tab", "initTocToggle", "HIDE_TOC_KEY"):
+            self.assertIn(marker, body, f"目次トグルの {marker} が standalone に無い")
+        # 切替は is-wide class の付け外しで行い、全幅化は既存 CSS に任せる
+        self.assertIn('classList.toggle("is-wide"', body)
+        # タブは開閉共通の 1 つ。開いている間は矢印を反転して見せる
+        self.assertIn(".is-published .toc-toggle-tab { display: inline-flex; }", css)
+        self.assertIn(".canvas:not(.is-wide) ~ .toc-toggle-tab .tt-chev", css)
+
     def test_document_without_toc_still_publishes(self) -> None:
         """目次を持たない文書でも publish が成立する。
 

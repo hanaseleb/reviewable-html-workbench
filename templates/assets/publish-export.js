@@ -219,6 +219,10 @@
       const tocNav = await fetchAssetText("assets/toc-nav.js");
       if (tocNav) {
         tocNavScript = "<script>\n" + tocNav + "\n</script>\n";
+      } else {
+        // toc-nav.js を同梱する前に render された bundle には asset が無い。黙って省略すると
+        // 目次が光らない HTML がそのまま公開されるので、書き出した人に知らせる
+        toast("目次の script が見つかりません。資料を render し直してから書き出してください");
       }
     }
     const html =

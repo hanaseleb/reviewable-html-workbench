@@ -183,6 +183,20 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn("MERMAID_INIT_JS", script)
         self.assertIn("mermaidScripts +", script)
 
+    def test_publish_export_warns_when_toc_script_is_missing(self) -> None:
+        """asset を取れないまま黙って書き出すと、目次が光らない HTML が公開まで気づかれない。
+
+        判定基準の出所: 同じ状況で CLI 側の publish.py:_inline_toc_nav_script が repo の
+        template から補う実装になっていること (ブラウザ側は fetch できないので補えず、
+        知らせるしかない)。2026-08-05 に、asset を持たない bundle が実在することを確認した。
+        """
+        script = (ROOT / "templates/assets/publish-export.js").read_text(encoding="utf-8")
+        block = script[script.index('const tocNav = await fetchAssetText("assets/toc-nav.js")') :]
+        block = block[: block.index("const html =")]
+
+        self.assertIn("else", block)
+        self.assertIn("toast(", block)
+
     def test_published_i18n_keys_exist(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
         ja_block = script[script.index("ja: {") : script.index("},\n    en: {")]
