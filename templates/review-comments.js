@@ -115,6 +115,11 @@
     positionFrame: 0,
   };
 
+  // コメントのハイライトと番号は本文の中へ後から差し込まれる。番号は inline なので文字幅が
+  // 増え、差し込みの前後で行の折り返しが変わって文章が一瞬ずれて見える (実測で本文が 165px
+  // 伸びた)。差し込みが終わるまで本文を隠し、確定した状態だけを見せる。
+  // JS が動かない環境では最初から付かないので、本文が消えたままにはならない。
+  hideProseUntilSettled();
   initI18nLabels();
 
   const ui = createUi();
@@ -212,6 +217,21 @@
     return rail;
   }
 
+  function hideProseUntilSettled() {
+    const prose = document.querySelector(".prose");
+    if (!prose) {
+      return;
+    }
+    prose.classList.add("is-settling");
+    // コメントの読み込みが失敗して revealProse に届かない場合の保険。
+    // 本文が隠れたままになるのが最悪なので、時間が来たら必ず出す
+    window.setTimeout(revealProse, 1200);
+  }
+
+  function revealProse() {
+    document.querySelector(".prose")?.classList.remove("is-settling");
+  }
+
   async function loadComments() {
     const local = readLocalComments();
     try {
@@ -227,6 +247,7 @@
     }
     writeLocalComments();
     renderComments();
+    revealProse();
   }
 
   async function saveComments() {

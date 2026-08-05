@@ -385,6 +385,9 @@ h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(
   font-family: var(--font-mono); font-size: inherit; font-weight: 600; color: var(--ink-3);
   margin-right: 8px; letter-spacing: 0;
 }
+/* コメントのハイライトを差し込む間だけ本文を伏せる。差し込みで行の折り返しが変わり、
+   文章がずれて見えるのを避ける。class は review-comments.js が付け外しする */
+.prose.is-settling { visibility: hidden; }
 .prose p { margin: 0; max-width: none; text-wrap: pretty; }
 .prose a { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
 .prose a:hover { color: var(--brand); text-decoration-thickness: 2px; }
