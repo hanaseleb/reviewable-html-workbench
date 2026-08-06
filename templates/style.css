@@ -1036,6 +1036,17 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .cmt-quote { font-size: 12px; color: var(--ink-3); border-left: 2px solid var(--line-2); padding-left: 8px; margin: 0 0 8px; font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt-body { color: var(--ink); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt-body p { margin: 0; }
+/* コメント本文の最小 Markdown 表示 (引用・code)。強調は既定の太字に任せる */
+.cmt-body blockquote, .reply-body blockquote {
+  margin: 4px 0; padding: 1px 0 1px 9px;
+  border-left: 2px solid var(--line-3);
+  color: var(--ink-3); font-size: 0.95em;
+}
+.cmt-body code, .reply-body code {
+  font-family: var(--font-mono); font-size: 0.9em;
+  background: var(--paper-2); border: 1px solid var(--line-1);
+  border-radius: 3px; padding: 0 4px;
+}
 
 /* threaded replies */
 .cmt-thread { margin-top: 10px; border-top: 1px solid var(--line-1); padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
@@ -1208,14 +1219,11 @@ textarea.cmt-input, input.cmt-input {
   border: 1px solid var(--line-2);
   border-radius: var(--r-md);
   box-shadow: var(--sh-2);
-  transition: opacity .15s ease;
 }
-/* コメントを書いている間は入力中の文字が最優先。fixed のこの bar は rail 下部の
-   返信欄と重なり、入力が bar の下に隠れて見えなくなるため、入力フォーカス中は消す */
-body:has(.cmt-rail textarea:focus, .cmt-rail input:focus, .review-comments-composer textarea:focus) .review-comments-utility {
-  opacity: 0;
-  pointer-events: none;
-}
+/* 既定は非表示 (display:flex が hidden 属性に勝つため明示する)。
+   常時出すと fixed のこの bar が rail 下部の返信欄・送信ボタンを覆うので、
+   topbar の JSON ボタンで開いたときだけ表示する */
+.review-comments-utility[hidden] { display: none; }
 .review-comments-status {
   color: var(--ink-3);
   font-size: var(--fs-caption);

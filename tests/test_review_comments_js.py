@@ -197,17 +197,40 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn("else", block)
         self.assertIn("toast(", block)
 
-    def test_utility_bar_hides_while_typing_comment(self) -> None:
-        """コメント返信を打つとき Export/Import バーが textarea を覆い、入力中の文字が見えない。
+    def test_utility_bar_is_hidden_until_opened_from_toolbar(self) -> None:
+        """Export/Import バーが常時表示に戻ると、rail 下部の返信欄と送信ボタンを覆って
+        コメント操作ができなくなる。
 
-        判定基準の出所: 2026-08-05 のユーザー報告 (rail 下部の返信欄に bar が重なった
-        スクリーンショット) と、その修正設計 (rail 内の入力フォーカス中は bar を隠す)。
+        判定基準の出所: 2026-08-05 のユーザー報告 2 件 (返信入力とバーが重なった
+        スクリーンショット。focus 連動の非表示でも未入力時の送信ボタンが覆われたままだった)
+        と、その修正設計 (既定 hidden + topbar の JSON ボタンで開閉)。
         """
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        self.assertIn('"review-comments-utility" hidden', script)
+        self.assertIn("initUtilityToggle", script)
+        self.assertIn("jsonToggle", script)
         css = (ROOT / "templates/style.css").read_text(encoding="utf-8")
-        idx = css.index(".cmt-rail textarea:focus")
-        rule = css[idx : css.index("}", idx)]
-        self.assertIn("opacity: 0", rule)
-        self.assertIn("pointer-events: none", rule)
+        self.assertIn(".review-comments-utility[hidden] { display: none; }", css)
+
+    def test_comment_markdown_renders_quotes_and_emphasis(self) -> None:
+        """agent 返信の > 引用や **強調** が記号のまま平文表示され、どこが引用で
+        どこが発言か読み分けられない。
+
+        判定基準の出所: 2026-08-05 のユーザー報告 (引用記号が生のまま並ぶ返信の
+        スクリーンショットと「どこが引用か分からない」の指摘) と、その修正設計
+        (escape を通した後に blockquote / strong / code だけへ変換する)。
+        """
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        # 親コメントと返信の両方の表示に適用されている
+        self.assertIn("renderCommentMarkdown(thread.comment", script)
+        self.assertIn("renderCommentMarkdown(reply.body)", script)
+        # 編集用 textarea は生テキストのまま (markdown HTML を混ぜない)
+        self.assertIn("data-thread-comment-editor rows=\"3\" hidden>${escapeHtml(thread.comment", script)
+        # escape が変換より先 (本文の HTML を script として解釈させない)
+        fn = script[script.index("function renderInlineMarkdown") :]
+        fn = fn[: fn.index("return s;")]
+        self.assertLess(fn.index("escapeHtml"), fn.index("<code>"))
+        self.assertLess(fn.index("escapeHtml"), fn.index("<strong>"))
 
     def test_published_i18n_keys_exist(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")

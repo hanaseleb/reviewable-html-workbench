@@ -25,6 +25,8 @@
       tocToggleTitle: "目次の表示切替",
       commentsToggleLabel: "コメント",
       commentsToggleTitle: "コメントの表示切替",
+      jsonToggleLabel: "JSON",
+      jsonToggleTitle: "comments.json の Export / Import",
       publishLabel: "公開プレビュー",
       publishActive: "プレビュー中",
       publishTitle: "公開プレビュー",
@@ -63,6 +65,8 @@
       tocToggleTitle: "Toggle table of contents",
       commentsToggleLabel: "Comments",
       commentsToggleTitle: "Toggle comments",
+      jsonToggleLabel: "JSON",
+      jsonToggleTitle: "Export / import comments.json",
       publishLabel: "Publish preview",
       publishActive: "Previewing",
       publishTitle: "Publish preview",
@@ -128,6 +132,7 @@
   initThemeToggle();
   initFilter();
   initPanelToggles();
+  initUtilityToggle();
   initPublishToggle();
   initTocScrollSpy();
   initCommentRailScroll();
@@ -174,7 +179,9 @@
       '    <button type="button" data-save-comment>Comment</button>',
       "  </div>",
       "</section>",
-      '<div class="review-comments-utility">',
+      // 常時表示しない。fixed の bar は rail 下部の返信欄・送信ボタンと重なるため、
+      // topbar の JSON ボタンで開いたときだけ出す
+      '<div class="review-comments-utility" hidden>',
       '  <span class="review-comments-status" data-comments-status>standalone</span>',
       '  <button type="button" data-export-comments>Export</button>',
       '  <label class="review-comments-import">Import<input type="file" accept="application/json" data-import-comments></label>',
@@ -191,6 +198,7 @@
       saveButton: root.querySelector("[data-save-comment]"),
       exportButton: root.querySelector("[data-export-comments]"),
       importInput: root.querySelector("[data-import-comments]"),
+      utilityBar: root.querySelector(".review-comments-utility"),
       status: root.querySelector("[data-comments-status]"),
       commentRail,
       commentLayer: commentRail.querySelector("#cmtLayer"),
@@ -708,7 +716,7 @@
       `  <span class="cmt-state">${escapeHtml(t.cardState[cardState])}</span>`,
       "</div>",
       `<blockquote class="cmt-quote">${escapeHtml(thread.selected_text || thread.block_id || `Comment ${number}`)}</blockquote>`,
-      `<div class="cmt-body review-comment-main-body" data-thread-comment-display tabindex="0">${escapeHtml(thread.comment || "")}</div>`,
+      `<div class="cmt-body review-comment-main-body" data-thread-comment-display tabindex="0">${renderCommentMarkdown(thread.comment || "")}</div>`,
       `<textarea data-thread-comment-editor rows="3" hidden>${escapeHtml(thread.comment || "")}</textarea>`,
       replies,
       resolvedBanner,
@@ -826,7 +834,7 @@
         `  <div class="av">${escapeHtml(replyInitials(reply))}</div>`,
         "  <div>",
         `    <div class="reply-name">${escapeHtml(replyAuthor(reply))}<span class="reply-time">${escapeHtml(formatDateTime(reply.created_at))}</span></div>`,
-        `    <div class="reply-body">${escapeHtml(reply.body)}</div>`,
+        `    <div class="reply-body">${renderCommentMarkdown(reply.body)}</div>`,
         "  </div>",
         "</div>",
       ].join("");
@@ -1084,6 +1092,33 @@
   function rerenderMermaid() {
     if (typeof window.__rhwRerenderMermaid !== "function") { return; }
     Promise.resolve(window.__rhwRerenderMermaid()).then(schedulePositionCards, () => {});
+  }
+
+  // comments.json の Export/Import bar は常時出さず、topbar の JSON ボタンで開閉する。
+  // 出しっぱなしだと fixed の bar が rail 下部の返信欄・送信ボタンを覆って操作できない
+  function initUtilityToggle() {
+    const toolset = document.querySelector(".topbar .toolset");
+    if (!toolset || !ui.utilityBar) {
+      return;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn ghost";
+    button.id = "jsonToggle";
+    button.title = t.jsonToggleTitle;
+    button.setAttribute("aria-pressed", "false");
+    button.innerHTML =
+      '<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"' +
+      ' stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12v2h10v-2"/></svg>';
+    const label = document.createElement("span");
+    label.textContent = t.jsonToggleLabel;
+    button.appendChild(label);
+    button.addEventListener("click", () => {
+      const open = ui.utilityBar.hidden;
+      ui.utilityBar.hidden = !open;
+      button.setAttribute("aria-pressed", open ? "true" : "false");
+    });
+    toolset.appendChild(button);
   }
 
   function initThemeToggle() {
@@ -1759,6 +1794,51 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  // コメント本文の最小 Markdown 表示。> 引用 (入れ子可)・**強調**・`code` だけを
+  // HTML へ変換する。保存データと編集 textarea は生テキストのまま、表示だけ変える。
+  // 見出しやリンクは対応しない (コメントで実際に使われるのが引用と強調のため)
+  function renderCommentMarkdown(text) {
+    const lines = String(text || "").split("\n");
+    const parts = [];
+    let i = 0;
+    while (i < lines.length) {
+      if (/^\s*>/.test(lines[i])) {
+        const quoted = [];
+        while (i < lines.length && /^\s*>/.test(lines[i])) {
+          quoted.push(lines[i].replace(/^\s*> ?/, ""));
+          i += 1;
+        }
+        // 1 段むいた中身を再帰で処理すると > > の入れ子がそのまま入れ子 blockquote になる
+        parts.push("<blockquote>" + renderCommentMarkdown(quoted.join("\n")) + "</blockquote>");
+      } else {
+        const plain = [];
+        while (i < lines.length && !/^\s*>/.test(lines[i])) {
+          plain.push(lines[i]);
+          i += 1;
+        }
+        let segment = plain.join("\n");
+        // blockquote は block 要素で前後に視覚的な区切りが付くため、隣接する空行を
+        // pre-wrap でそのまま出すと余白が二重になる。引用に接する側の改行を 1 つ落とす
+        if (parts.length) {
+          segment = segment.replace(/^\n/, "");
+        }
+        if (i < lines.length) {
+          segment = segment.replace(/\n$/, "");
+        }
+        parts.push(renderInlineMarkdown(segment));
+      }
+    }
+    return parts.join("");
+  }
+
+  function renderInlineMarkdown(text) {
+    // escape が先、変換が後。逆にすると本文の HTML が script として解釈される
+    let s = escapeHtml(text);
+    s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    s = s.replace(/\*\*([^*\n]+?)\*\*/g, "<strong>$1</strong>");
+    return s;
   }
 
   function formatDateTime(value) {

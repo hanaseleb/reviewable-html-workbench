@@ -4,7 +4,7 @@ title: 公開出力の目次をトグルで隠し、本文を全幅表示でき�
 status: Done
 assignee: []
 created_date: '2026-08-05 12:56'
-updated_date: '2026-08-05 13:29'
+updated_date: '2026-08-05 14:54'
 labels:
   - 機能追加
   - publish
@@ -65,6 +65,8 @@ test: test_publish_toc.py に 1 件追加 (309 件 OK)。トグル実装を除�
 2026-08-05 デザイン往復: ユーザー実機確認で 2 回改訂。(1) 浮いた丸ボタン → 左端密着の取っ手型タブ、(2) 隠す/戻す 2 ボタン → 開閉共通の左端固定タブ 1 つ (矢印の向きだけで状態を示す)。最終実測: タブ位置は両状態とも (0,96) で不動、本文幅 1272⇄1536px、位置ずれ 0。ユーザー確認 ok (2026-08-05)。
 
 2026-08-05 追修正: 公開 HTML を iframe に埋め込むホストが iframe 内の body>* へ width:100%!important を注入する環境で、body 直下に置いたタブが全幅の白帯になりタイトルを覆った。タブを canvas 内へ移設して回避 (position:fixed のため表示位置は不変)。該当ホストの注入 CSS を再現した headless 実測でタブ幅 28px・位置 (0,96) 固定・トグル動作を確認し、公開中の 3 本を再 deploy。version 1.26.1。
+
+2026-08-05 utility bar の追修正: focus 連動の非表示は「未入力時に送信ボタンが覆われたまま」「送信 click の瞬間に bar が戻って click を奪う」の 2 点で不十分だった (ユーザー報告)。bar を既定 hidden にし、topbar に追加した JSON ボタンで開いたときだけ表示する形へ変更。実測: 既定 none → click で flex → 再 click で none。
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
