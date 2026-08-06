@@ -95,6 +95,8 @@
   const COMMENTS_URL = "annotations/comments.json";
   const STORAGE_PREFIX = "reviewable-html-comments:";
   const THEME_STORAGE_KEY = "reviewable-theme";
+  // 目次列とコメント列のドラッグ変更幅の保存先
+  const COL_WIDTH_STORAGE_KEY = "reviewable-col-widths";
   const COMMENT_STATUS = Object.freeze({
     needsAgentReview: "needs_agent_review",
     needsUserReply: "needs_user_reply",
@@ -133,6 +135,7 @@
   initFilter();
   initPanelToggles();
   initUtilityToggle();
+  initColumnResizers();
   initPublishToggle();
   initTocScrollSpy();
   initCommentRailScroll();
@@ -1092,6 +1095,68 @@
   function rerenderMermaid() {
     if (typeof window.__rhwRerenderMermaid !== "function") { return; }
     Promise.resolve(window.__rhwRerenderMermaid()).then(schedulePositionCards, () => {});
+  }
+
+  // 目次列とコメント列の幅をドラッグで変える。列幅は CSS 変数 (--toc-w / --rail-w) に
+  // 一本化されており、ここは変数の書き換え・clamp・保存だけを行う (grid 構造は変えない)
+  function initColumnResizers() {
+    const grid = document.querySelector("#canvas .doc-grid");
+    if (!grid) {
+      return;
+    }
+    const defs = [
+      { key: "toc", varName: "--toc-w", host: ".toc", grow: 1, min: 160, max: 400 },
+      { key: "rail", varName: "--rail-w", host: ".cmt-rail", grow: -1, min: 240, max: 560 },
+    ];
+    let saved = {};
+    try {
+      saved = JSON.parse(safeLocalStorageGet(COL_WIDTH_STORAGE_KEY) || "{}") || {};
+    } catch (e) {
+      saved = {};
+    }
+    defs.forEach((def) => {
+      const host = grid.querySelector(def.host);
+      if (!host) {
+        return;
+      }
+      const clampWidth = (w) => Math.min(def.max, Math.max(def.min, Math.round(w)));
+      if (Number.isFinite(saved[def.key])) {
+        grid.style.setProperty(def.varName, clampWidth(saved[def.key]) + "px");
+      }
+      const handle = document.createElement("div");
+      handle.className = "col-resizer col-resizer-" + def.key;
+      grid.appendChild(handle);
+
+      let startX = 0;
+      let startWidth = 0;
+      const onMove = (event) => {
+        // grow=1 は右へ引くと広がる列 (目次)、-1 は左へ引くと広がる列 (コメント)
+        const width = clampWidth(startWidth + def.grow * (event.clientX - startX));
+        grid.style.setProperty(def.varName, width + "px");
+        schedulePositionCards();
+      };
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.body.classList.remove("is-col-resizing");
+        saved[def.key] = clampWidth(host.getBoundingClientRect().width);
+        safeLocalStorageSet(COL_WIDTH_STORAGE_KEY, JSON.stringify(saved));
+      };
+      handle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startX = event.clientX;
+        startWidth = host.getBoundingClientRect().width;
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.body.classList.add("is-col-resizing");
+      });
+      handle.addEventListener("dblclick", () => {
+        grid.style.removeProperty(def.varName);
+        delete saved[def.key];
+        safeLocalStorageSet(COL_WIDTH_STORAGE_KEY, JSON.stringify(saved));
+        schedulePositionCards();
+      });
+    });
   }
 
   // comments.json の Export/Import bar は常時出さず、topbar の JSON ボタンで開閉する。

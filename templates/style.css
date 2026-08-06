@@ -228,10 +228,28 @@ body {
 .doc-shell { max-width: 1600px; margin: 0 auto; padding: var(--sp-7) var(--sp-6) var(--sp-8); }
 .doc-grid {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 332px;
+  /* 列幅は変数に一本化する。ドラッグ変更 (review-comments.js) は変数の書き換えだけを行う */
+  grid-template-columns: var(--toc-w, 232px) minmax(0, 1fr) var(--rail-w, 332px);
   column-gap: var(--sp-6);
   align-items: start;
+  position: relative;
 }
+
+/* 列幅のドラッグハンドル (review-comments.js が生成)。列境界の gap に全高で置く。
+   toc / rail は overflow で中身を切るため、その中ではなく doc-grid 直下に置く */
+.col-resizer { position: absolute; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 5; }
+.col-resizer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px;
+  background: transparent; border-radius: 1px;
+}
+.col-resizer:hover::after, body.is-col-resizing .col-resizer::after { background: var(--line-3); }
+.col-resizer-toc { left: calc(var(--toc-w, 232px) + (var(--sp-6) - 12px) / 2); }
+.col-resizer-rail { right: calc(var(--rail-w, 332px) + (var(--sp-6) - 12px) / 2); }
+.canvas.hide-toc .col-resizer-toc { display: none; }
+.canvas.hide-comments .col-resizer-rail { display: none; }
+body.is-col-resizing { cursor: col-resize; user-select: none; }
+/* 3 カラムを保てる幅でだけ操作できる (列の出し入れと同じ閾値) */
+@media (max-width: 1300px) { .col-resizer { display: none; } }
 
 /* TOC rail */
 .toc { position: sticky; top: 76px; max-height: calc(100vh - 76px - 32px); overflow-y: hidden; display: flex; flex-direction: column; font-size: var(--fs-small); }
@@ -895,8 +913,8 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 /* 列の出し入れは 3 カラムを保てる幅でだけ行う。狭い画面では下の RESPONSIVE 節が畳むので、
    ここで固定幅の列を指定し続けると詳細度で勝ってしまい本文が潰れる */
 @media (min-width: 1301px) {
-  .canvas.hide-toc .doc-grid { grid-template-columns: minmax(0, 1fr) 332px; }
-  .canvas.hide-comments .doc-grid { grid-template-columns: 232px minmax(0, 1fr); }
+  .canvas.hide-toc .doc-grid { grid-template-columns: minmax(0, 1fr) var(--rail-w, 332px); }
+  .canvas.hide-comments .doc-grid { grid-template-columns: var(--toc-w, 232px) minmax(0, 1fr); }
   .canvas.hide-toc.hide-comments .doc-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .canvas.hide-comments .cx { background: transparent; border-bottom: 0; cursor: default; }
@@ -1116,7 +1134,7 @@ textarea.cmt-input, input.cmt-input {
    セレクタに .canvas を足しているのは、表示切替 (.canvas.hide-toc 等) や公開モード
    (.is-published) の列指定より詳細度を上げて確実に畳むため */
 @media (max-width: 1300px) {
-  .canvas .doc-grid { grid-template-columns: minmax(0,1fr) 320px; }
+  .canvas .doc-grid { grid-template-columns: minmax(0,1fr) var(--rail-w, 320px); }
   .canvas .toc { display: none; }
   /* comment rail が出ない状態 — コメントを隠している間と、rail を持たない公開モード —
      では 2 列目を残さない。残すと本文の右に空の列がそのまま余白として見える */

@@ -212,6 +212,22 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         css = (ROOT / "templates/style.css").read_text(encoding="utf-8")
         self.assertIn(".review-comments-utility[hidden] { display: none; }", css)
 
+    def test_column_widths_are_draggable_via_css_variables(self) -> None:
+        """列幅のドラッグ変更が失われると、目次・コメント列の幅を読者が調整できない。
+        変数化が崩れると保存済みの幅が layout に反映されず、既定幅に固定されたままになる。
+
+        判定基準の出所: TASK-17 の決定事項 (列幅は CSS 変数 --toc-w / --rail-w に一本化し、
+        ドラッグは変数の書き換えだけを行う。clamp は目次 160〜400 / コメント 240〜560)。
+        """
+        css = (ROOT / "templates/style.css").read_text(encoding="utf-8")
+        self.assertIn("var(--toc-w, 232px) minmax(0, 1fr) var(--rail-w, 332px)", css)
+        self.assertIn(".col-resizer", css)
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        self.assertIn("initColumnResizers", script)
+        self.assertIn('{ key: "toc", varName: "--toc-w", host: ".toc", grow: 1, min: 160, max: 400 }', script)
+        self.assertIn('{ key: "rail", varName: "--rail-w", host: ".cmt-rail", grow: -1, min: 240, max: 560 }', script)
+        self.assertIn("COL_WIDTH_STORAGE_KEY", script)
+
     def test_comment_markdown_renders_quotes_and_emphasis(self) -> None:
         """agent 返信の > 引用や **強調** が記号のまま平文表示され、どこが引用で
         どこが発言か読み分けられない。
