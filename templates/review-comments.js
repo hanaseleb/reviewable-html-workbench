@@ -737,6 +737,7 @@
         return;
       }
       activate(thread.id, false);
+      scrollBodyToComment(thread);
     });
     card.addEventListener("focus", () => activate(thread.id, false));
     card.querySelector("[data-thread-comment-display]")?.addEventListener("click", (event) => {
@@ -1005,6 +1006,27 @@
   // scrollCard=true: activation came from the document side (highlight, badge,
   // new comment) — reveal the matching card by scrolling the RAIL to it, never
   // the document. false: the user is already working inside the card.
+  // カードのクリックで、そのコメントが付いた本文位置へ飛ぶ。
+  // ハイライトが無いコメント (位置を特定できなかったもの) は所属 block へ飛ぶ
+  function scrollBodyToComment(thread) {
+    const target =
+      document.querySelector(commentSelector(thread.id)) ||
+      (thread.block_id ? document.getElementById(thread.block_id) : null);
+    if (!target) {
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const viewHeight = window.innerHeight;
+    // 既に視界の読みやすい帯 (上 15%〜70%) にあるなら動かさない
+    if (rect.top >= viewHeight * 0.15 && rect.bottom <= viewHeight * 0.7) {
+      return;
+    }
+    const sc = document.getElementById("canvas") || document.documentElement;
+    const top =
+      rect.top - sc.getBoundingClientRect().top + sc.scrollTop - viewHeight * 0.25;
+    sc.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
+
   function activate(commentId, scrollCard = true) {
     if (!commentId) {
       return;

@@ -212,6 +212,23 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         css = (ROOT / "templates/style.css").read_text(encoding="utf-8")
         self.assertIn(".review-comments-utility[hidden] { display: none; }", css)
 
+    def test_card_click_scrolls_body_to_comment(self) -> None:
+        """カードをクリックしても本文が動かず、コメントの対象箇所を目視で探すことになる。
+
+        判定基準の出所: TASK-18 の決定事項 (カードクリックで本文ハイライトへスクロール、
+        ハイライト無しは所属 block へ、視界の上 15%〜70% にあるなら動かさない)。
+        """
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        # カードクリックの handler から呼ばれている (関数定義の存在だけでは通らない形で見る)
+        self.assertIn("activate(thread.id, false);\n      scrollBodyToComment(thread);", script)
+        fn = script[script.index("function scrollBodyToComment") :]
+        fn = fn[: fn.index("\n  function ", 1)]
+        self.assertIn("commentSelector(thread.id)", fn)
+        self.assertIn("getElementById(thread.block_id)", fn)
+        self.assertIn("viewHeight * 0.15", fn)
+        self.assertIn("viewHeight * 0.7", fn)
+        self.assertIn('behavior: "smooth"', fn)
+
     def test_column_widths_are_draggable_via_css_variables(self) -> None:
         """列幅のドラッグ変更が失われると、目次・コメント列の幅を読者が調整できない。
         変数化が崩れると保存済みの幅が layout に反映されず、既定幅に固定されたままになる。
