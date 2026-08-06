@@ -7,6 +7,7 @@ import re
 import sys
 import threading
 import time
+from collections import deque
 from functools import partial
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -40,6 +41,31 @@ def resolve_sse_start_id(header_value: str | None, current_last_id: int) -> int:
         return current_last_id
 
 
+class CommentChangeTracker:
+    """server 経由で通知済みの comments.json 変更 (mtime) を記録する。
+
+    add-reply などの書き手は、ファイルを書いた後に自分で comment_updated を配信する。
+    file_watcher が同じ変更を mtime で再検知してもう一度配信すると、source:"agent" の
+    filter を素通りする複製イベントになり、書いた本人に「新着」通知が届いてしまう。
+    通知済みの mtime を覚えておき、file_watcher はそれと一致する変化を配信しない。
+    記録に無い mtime (エディタでの直接編集など) は今までどおり配信される。
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._announced: deque[float] = deque(maxlen=8)
+
+    def announce(self, mtime: float) -> None:
+        if mtime <= 0:
+            return
+        with self._lock:
+            self._announced.append(mtime)
+
+    def should_publish(self, mtime: float) -> bool:
+        with self._lock:
+            return mtime not in self._announced
+
+
 class ReviewPreviewHandler(SimpleHTTPRequestHandler):
     comments_route = "/annotations/comments.json"
     checklist_route = "/annotations/checklist-state.json"
@@ -60,11 +86,25 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
                 return 0.0
             return time.monotonic() - cls._last_activity
 
-    def __init__(self, *args: object, root: Path, event_bus: EventBus, **kwargs: object) -> None:
+    def __init__(
+        self,
+        *args: object,
+        root: Path,
+        event_bus: EventBus,
+        change_tracker: CommentChangeTracker | None = None,
+        **kwargs: object,
+    ) -> None:
         self.root = root.resolve()
         self.store = CommentStore(self.root)
         self.event_bus = event_bus
+        self.change_tracker = change_tracker or CommentChangeTracker()
         super().__init__(*args, directory=str(self.root), **kwargs)
+
+    def _comments_mtime(self) -> float:
+        try:
+            return (self.root / "annotations" / "comments.json").stat().st_mtime
+        except OSError:
+            return 0.0
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
@@ -98,6 +138,8 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         except (json.JSONDecodeError, CommentStoreError) as exc:
             self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
+        # この書き込みはこの場で配信するので、file_watcher が再配信しないよう記録する
+        self.change_tracker.announce(self._comments_mtime())
         source = self.headers.get("X-Comment-Source", "browser")
         self.event_bus.publish("comment_updated", {"source": source})
         self._send_json({"ok": True, "path": "annotations/comments.json"})
@@ -114,6 +156,9 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
             return
         event_type = body.get("type", "custom")
         data = {k: v for k, v in body.items() if k != "type"}
+        if event_type == "comment_updated":
+            # 送信者がファイルを書いた直後の通知。file_watcher の再検知を配信させない
+            self.change_tracker.announce(self._comments_mtime())
         self.event_bus.publish(event_type, data)
         self._send_json({"ok": True, "event_type": event_type})
 
@@ -227,7 +272,8 @@ def serve(
         raise PreviewConfigurationError(f"preview root does not exist: {root}")
     handler_class = ReviewPreviewHandler
     event_bus = EventBus()
-    handler = partial(handler_class, root=root, event_bus=event_bus)
+    change_tracker = CommentChangeTracker()
+    handler = partial(handler_class, root=root, event_bus=event_bus, change_tracker=change_tracker)
     with ThreadingHTTPServer((bind, port), handler) as server:
         server.event_bus = event_bus
         actual_port = server.server_address[1]
@@ -246,7 +292,7 @@ def serve(
                 grace_seconds=owner_grace,
                 idle_timeout=idle_timeout,
             )
-        _start_comments_file_watcher(root, event_bus)
+        _start_comments_file_watcher(root, event_bus, change_tracker=change_tracker)
         server.serve_forever()
 
 
@@ -331,6 +377,7 @@ def _start_comments_file_watcher(
     root: Path,
     event_bus: EventBus,
     interval: float = 2.0,
+    change_tracker: CommentChangeTracker | None = None,
 ) -> None:
     comments_path = root / "annotations" / "comments.json"
 
@@ -348,7 +395,10 @@ def _start_comments_file_watcher(
                 continue
             if current_mtime != last_mtime:
                 last_mtime = current_mtime
-                event_bus.publish("comment_updated", {"source": "file_watcher"})
+                # server 経由で配信済みの変更 (agent の add-reply や browser の保存) は
+                # 再配信しない。書いた本人へ「新着」通知が届いてしまうため
+                if change_tracker is None or change_tracker.should_publish(current_mtime):
+                    event_bus.publish("comment_updated", {"source": "file_watcher"})
 
     thread = threading.Thread(target=watch, name="comments-file-watcher", daemon=True)
     thread.start()

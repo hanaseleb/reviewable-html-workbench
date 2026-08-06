@@ -110,6 +110,49 @@ class AddReplyCliTest(unittest.TestCase):
                 session.process.terminate()
                 session.process.wait(timeout=5)
 
+    def test_file_watcher_does_not_rebroadcast_agent_reply(self) -> None:
+        """agent が add-reply すると、file_watcher の mtime 再検知が source:"file_watcher"
+        で複製イベントを流し、source:"agent" filter を素通りして agent 自身に「新着」
+        通知が届く (自分の返信で起こされる)。
+
+        判定基準の出所: 2026-08-06 のユーザー報告 (自分の返信の通知が届いた画面) と
+        TASK-19 の決定事項 (通知済みの書き込みは file_watcher が再配信しない。
+        通知なしの直接編集は今までどおり配信する)。
+        """
+        import select
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "index.html").write_text("<h1>Preview</h1>", encoding="utf-8")
+            _write_comments(root, [_thread("cmt-1")])
+
+            session = start_preview(root, "local", owner_pid=os.getpid(), idle_timeout=0)
+            try:
+                with _open_sse(session.url.replace("/index.html", "/events")) as stream:
+                    _run_cli("add-reply", "--root", str(root), "--thread-id", "cmt-1", "--body", "self reply")
+                    # 1 件目は agent 自身の通知 (これは watch-comments 側で filter される)
+                    event = _read_sse_event(stream)
+                    self.assertEqual(event["data"]["source"], "agent")
+
+                    # file_watcher の周期 (2s) を跨いでも複製イベントが来ないこと
+                    ready, _, _ = select.select([stream], [], [], 3.5)
+                    self.assertEqual(ready, [], "file_watcher が agent の書き込みを再配信した")
+
+                    # 通知なしの直接編集 (外部エディタ相当) は今までどおり配信されること
+                    payload = _read_comments(root)
+                    payload["comments"][0]["comment"] = "edited directly"
+                    (root / "annotations/comments.json").write_text(
+                        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                    ready, _, _ = select.select([stream], [], [], 4.0)
+                    self.assertNotEqual(ready, [], "直接編集が配信されなかった")
+                    event = _read_sse_event(stream)
+                self.assertEqual(event["data"]["source"], "file_watcher")
+            finally:
+                self.assertIsNotNone(session.process)
+                session.process.terminate()
+                session.process.wait(timeout=5)
+
     def test_add_reply_coexists_with_ingest_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
