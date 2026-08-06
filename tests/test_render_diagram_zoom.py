@@ -143,13 +143,21 @@ class RenderDiagramZoomTest(unittest.TestCase):
         self.assertIn("panBy(event.deltaX, event.deltaY)", script)
         self.assertIn("if (event.ctrlKey || event.metaKey)", script)
 
-    def test_diagram_zoom_overlay_background_is_opaque(self) -> None:
-        """拡大表示の背景に半透明トークンを使わない (背後の本文が透けるため)。"""
+    def test_diagram_zoom_overlay_background_is_opaque_and_theme_aware(self) -> None:
+        """拡大表示の背景は不透明かつ紙面 theme に追従する。
+
+        半透明トークンに戻ると背後の本文が透けて図が読めない。dark 固定 (--surface-dark)
+        に戻ると light の紙面から開いた図が dark 画像に見える (2026-08-06 ユーザー報告)。
+        期待値 --paper-2 / --ink は theme scope で再定義される紙面変数 (style.css :root と
+        [data-theme=dark]) から転記。
+        """
         css = STYLE_CSS.read_text(encoding="utf-8")
         start = css.index(".diagram-zoom-overlay {")
         overlay_rule = css[start : css.index("}", start)]
-        self.assertIn("background: var(--surface-dark)", overlay_rule)
+        self.assertIn("background: var(--paper-2)", overlay_rule)
+        self.assertIn("color: var(--ink)", overlay_rule)
         self.assertNotIn("background: var(--overlay-strong)", overlay_rule)
+        self.assertNotIn("--surface-dark", overlay_rule)
 
     def test_diagram_zoom_toolbar_has_download_button(self) -> None:
         script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
@@ -206,11 +214,16 @@ class RenderDiagramZoomTest(unittest.TestCase):
         self.assertIn('return ""', script)
 
     def test_diagram_download_background_falls_back_when_transparent(self) -> None:
-        """overlay が閉じている / 変数未解決でも透明背景の PNG を作らない。"""
+        """overlay が閉じている / 変数未解決でも透明背景の PNG を作らない。
+
+        fallback は紙面 (body) の地色 → 白の順 (overlay の theme 追従化に合わせ、
+        dark 固定色 #1c1f24 は廃止)。
+        """
         script = DIAGRAM_ZOOM_JS.read_text(encoding="utf-8")
 
         self.assertIn("function overlayBackgroundColor()", script)
-        self.assertIn('const fallback = "#1c1f24"', script)
+        self.assertIn("getComputedStyle(document.body).backgroundColor", script)
+        self.assertIn('isTransparent(bodyColor) ? "#ffffff" : bodyColor', script)
         self.assertIn('color === "transparent"', script)
 
 

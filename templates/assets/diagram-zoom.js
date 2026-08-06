@@ -256,18 +256,20 @@
     image.src = svgUrl;
   }
 
+  function isTransparent(color) {
+    return !color || color === "transparent" || /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(color);
+  }
+
   function overlayBackgroundColor() {
-    // overlay が閉じている / CSS 変数が未解決の場合に transparent を敷かないよう既定へ倒す
+    // overlay の地色は theme 追従 (--paper-2)。overlay が閉じている / CSS 変数が未解決の
+    // 場合は紙面 (body) の地色へ倒し、それも取れなければ白を敷く
     const overlay = document.querySelector(".diagram-zoom-overlay");
-    const fallback = "#1c1f24";
-    if (!overlay) {
-      return fallback;
+    const color = overlay ? getComputedStyle(overlay).backgroundColor : "";
+    if (!isTransparent(color)) {
+      return color;
     }
-    const color = getComputedStyle(overlay).backgroundColor;
-    if (!color || color === "transparent" || /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(color)) {
-      return fallback;
-    }
-    return color;
+    const bodyColor = getComputedStyle(document.body).backgroundColor;
+    return isTransparent(bodyColor) ? "#ffffff" : bodyColor;
   }
 
   function openZoomOverlay(sourceSvg, triggerButton) {

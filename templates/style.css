@@ -93,7 +93,6 @@
   /* Utility colors */
   --ink-inverse: #fff;
   --ink-on-dark: #e7e3da;
-  --ink-on-overlay: #f4f1e8;
   --ink-code-bright: #f8fafc;
   --surface-dark: #1c1f24;
   --danger: #c0392b;
@@ -104,10 +103,6 @@
   --avatar-u3: #5a7d5a;
   --avatar-u4: #84566f;
   --overlay-strong: rgba(0, 0, 0, .85);
-  --overlay-panel: rgba(28,31,36,.92);
-  --overlay-line: rgba(255,255,255,.18);
-  --overlay-control: rgba(255,255,255,.12);
-  --overlay-control-hover: rgba(255,255,255,.22);
   --overlay-chip: rgba(255,255,255,.14);
   --overlay-badge: rgba(255,255,255,.25);
   --pulse-open: rgba(9,105,218,.4);
@@ -822,8 +817,10 @@ body.zoom-open { overflow: hidden; }
 .diagram-zoom-overlay {
   position: fixed; inset: 0; z-index: 9999; display: none;
   align-items: stretch; justify-content: stretch;
-  /* 不透明にする。半透明 (--overlay-strong) だと背後の本文が透けて図が読みにくい */
-  background: var(--surface-dark); color: var(--ink-on-overlay);
+  /* 不透明にする。半透明 (--overlay-strong) だと背後の本文が透けて図が読みにくい。
+     地色と文字色は紙面 theme に追従させる。dark 固定にすると light の紙面で開いた図が
+     dark 画像に見え、currentColor を使う inline SVG の線・文字も紙面と逆の色になる */
+  background: var(--paper-2); color: var(--ink);
 }
 .diagram-zoom-overlay.is-open { display: flex; }
 .diagram-zoom-overlay .zoom-viewport {
@@ -840,15 +837,15 @@ body.zoom-open { overflow: hidden; }
 .diagram-zoom-overlay .zoom-toolbar {
   position: absolute; right: var(--sp-3); bottom: var(--sp-3);
   display: inline-flex; gap: var(--sp-2); align-items: center;
-  padding: 6px; border: 1px solid var(--overlay-line); border-radius: var(--r-md);
-  background: var(--overlay-panel); box-shadow: var(--sh-3);
+  padding: 6px; border: 1px solid var(--line-2); border-radius: var(--r-md);
+  background: var(--paper); box-shadow: var(--sh-3);
 }
 .diagram-zoom-overlay .zoom-toolbar button {
   min-width: 36px; height: 34px; padding: 0 10px; border: 0; border-radius: var(--r-sm);
-  background: var(--overlay-control); color: inherit; font: inherit; cursor: pointer;
+  background: color-mix(in srgb, var(--ink) 9%, transparent); color: inherit; font: inherit; cursor: pointer;
 }
 .diagram-zoom-overlay .zoom-toolbar button:hover,
-.diagram-zoom-overlay .zoom-toolbar button:focus-visible { background: var(--overlay-control-hover); outline: none; }
+.diagram-zoom-overlay .zoom-toolbar button:focus-visible { background: color-mix(in srgb, var(--ink) 18%, transparent); outline: none; }
 
 /* ---------- 14. GENERATED IMAGE --------------------------- */
 .figure { margin: var(--sp-5) 0; }
