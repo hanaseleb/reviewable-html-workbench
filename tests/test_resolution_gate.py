@@ -1,4 +1,8 @@
-"""Tests for the resolution gate logic."""
+"""解決待ちゲートのテスト。
+
+このゲートが守るもの: ユーザーが書いた指摘・差し戻しに agent が返信するまで、
+設計反映へ進ませないこと。判定は comments.json の status だけで行う。
+"""
 
 from __future__ import annotations
 
@@ -18,13 +22,18 @@ def _write_comments(root: Path, threads: list[dict]) -> None:
 
 
 def _make_thread(
-    thread_id: str, comment: str, status: str = "needs_agent_review", replies: list | None = None,
+    thread_id: str,
+    comment: str,
+    status: str = "needs_agent_review",
+    replies: list | None = None,
+    suffix: str = "",
 ) -> dict:
     return {
         "id": thread_id,
         "document_id": "doc",
         "block_id": "block-1",
         "selected_text": "some text",
+        "suffix": suffix,
         "comment": comment,
         "status": status,
         "created_at": "2026-01-01T00:00:00Z",
@@ -32,132 +41,134 @@ def _make_thread(
     }
 
 
-class CheckGateOpenTest(unittest.TestCase):
+def _agent_reply(kind: str = "implementation_note") -> dict:
+    return {
+        "id": "rep-agent",
+        "author": "agent",
+        "role": "agent",
+        "kind": kind,
+        "body": "修正しました。",
+        "created_at": "2026-01-01T01:00:00Z",
+    }
+
+
+def _user_reply(body: str) -> dict:
+    return {
+        "id": "rep-user",
+        "author": "user",
+        "role": "user",
+        "kind": "note",
+        "body": body,
+        "created_at": "2026-01-01T02:00:00Z",
+    }
+
+
+class GateIsDecidedByStatusAloneTest(unittest.TestCase):
+    """status だけで gate が決まることを見張る。
+
+    壊れたら起きる不都合: ユーザーの差し戻しが「返信済み」「対応不要」と誤判定され、
+    通知にも出ず、ユーザーが催促するまで放置される (2026-08-08 の実事故)。
+    期待値の出所: 承認済み plan の gate 定義と、実事故 bundle
+    output/2026-08-08_hospital-recognition/annotations/comments.json の 2 スレッド。
+    """
+
+    def test_gate_follows_status_regardless_of_body_suffix_or_reply_history(self) -> None:
+        cases = [
+            # (case 名, thread, 期待 gate)
+            (
+                "実事故 cmt_msk04ndv: agent が返信した後にユーザーが再指摘した",
+                _make_thread(
+                    "cmt-redirect",
+                    "FTE?",
+                    status="needs_agent_review",
+                    replies=[
+                        _agent_reply(),
+                        _user_reply("常勤換算を割くという言葉だと読んでも意味が分からない"),
+                    ],
+                ),
+                "blocked",
+            ),
+            (
+                "実事故 cmt_msk03cbq: 本文側に操作語を含む未返信の質問",
+                _make_thread(
+                    "cmt-question",
+                    "ここで言う公式化の意味は?",
+                    status="needs_agent_review",
+                    suffix="委員会運営や新人指導に要する時間を勤務表に明示的に確保する。",
+                ),
+                "blocked",
+            ),
+            (
+                "agent が返信済みでユーザーの応答待ち",
+                _make_thread(
+                    "cmt-answered",
+                    "何の話?",
+                    status="needs_user_reply",
+                    replies=[_agent_reply(kind="answer")],
+                ),
+                "open",
+            ),
+            (
+                "解決済み",
+                _make_thread("cmt-done", "ここを直して", status="resolved"),
+                "open",
+            ),
+        ]
+        for label, thread, expected in cases:
+            with self.subTest(label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    _write_comments(root, [thread])
+                    self.assertEqual(check_gate(root).gate, expected)
+
     def test_gate_open_when_no_comments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_comments(root, [])
-            result = check_gate(root)
-            self.assertEqual(result.gate, "open")
-            self.assertEqual(result.blocking_threads, [])
+            self.assertEqual(check_gate(root).gate, "open")
 
-    def test_gate_open_when_all_resolved(self) -> None:
+    def test_mixed_threads_report_ids_and_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_comments(root, [
-                _make_thread("cmt-1", "Is this correct?", status="resolved"),
-                _make_thread("cmt-2", "Fix typo here", status="resolved"),
-            ])
-            result = check_gate(root)
-            self.assertEqual(result.gate, "open")
-
-    def test_gate_open_lists_resolved_actionable(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "Fix typo here", status="resolved"),
-            ])
-            state = {
-                "classifications": [
-                    {"comment_id": "cmt-1", "classification": "actionable"},
-                ],
-            }
-            state_path = root / "annotations" / "review-cycle-state.json"
-            state_path.write_text(json.dumps(state), encoding="utf-8")
-
-            result = check_gate(root)
-            self.assertEqual(result.gate, "open")
-            self.assertEqual(len(result.resolved_actionable), 1)
-            self.assertEqual(result.resolved_actionable[0]["thread_id"], "cmt-1")
-
-
-class CheckGateBlockedTest(unittest.TestCase):
-    def test_gate_blocked_by_unresolved_clarification(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "What do you mean by this?", status="needs_user_reply"),
+                _make_thread("cmt-1", "ここを直して", status="resolved"),
+                _make_thread("cmt-2", "これはどういう意味?", status="needs_agent_review"),
+                _make_thread("cmt-3", "回答済み", status="needs_user_reply"),
             ])
             result = check_gate(root)
             self.assertEqual(result.gate, "blocked")
-            self.assertEqual(len(result.blocking_threads), 1)
-            self.assertEqual(result.blocking_threads[0]["thread_id"], "cmt-1")
-
-    def test_gate_blocked_mixed_threads(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "Fix typo here", status="resolved"),
-                _make_thread("cmt-2", "Should this be X or Y?", status="needs_agent_review"),
-            ])
-            state = {
-                "classifications": [
-                    {"comment_id": "cmt-1", "classification": "actionable"},
-                    {"comment_id": "cmt-2", "classification": "needs_clarification"},
-                ],
-            }
-            state_path = root / "annotations" / "review-cycle-state.json"
-            state_path.write_text(json.dumps(state), encoding="utf-8")
-
-            result = check_gate(root)
-            self.assertEqual(result.gate, "blocked")
-            self.assertEqual(len(result.blocking_threads), 1)
-            self.assertEqual(result.blocking_threads[0]["thread_id"], "cmt-2")
-            self.assertEqual(len(result.resolved_actionable), 1)
-
-    def test_actionable_unresolved_does_not_block(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "Fix the typo in this sentence", status="needs_agent_review"),
-            ])
-            result = check_gate(root)
-            self.assertEqual(result.gate, "open")
+            self.assertEqual(result.needs_agent_review_threads, ["cmt-2"])
+            self.assertEqual(result.resolved_threads, ["cmt-1"])
+            self.assertEqual(
+                result.status_counts,
+                {"needs_agent_review": 1, "needs_user_reply": 1, "resolved": 1},
+            )
 
 
-class CheckGateWithStateTest(unittest.TestCase):
-    def test_uses_state_file_classification(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "ambiguous wording", status="needs_user_reply"),
-            ])
-            state = {
-                "classifications": [
-                    {"comment_id": "cmt-1", "classification": "needs_clarification"},
-                ],
-            }
-            state_path = root / "annotations" / "review-cycle-state.json"
-            state_path.write_text(json.dumps(state), encoding="utf-8")
+class GatePayloadContractTest(unittest.TestCase):
+    """payload が空でも全 key を出すことを見張る。
 
-            result = check_gate(root)
-            self.assertEqual(result.gate, "blocked")
+    壊れたら起きる不都合: 返信待ちが無い時に payload が {"gate": "open"} だけに縮退し、
+    watch-comments の通知行から判断材料が消えて、agent が「自分宛て無し」と読み違える。
+    期待値の出所: 承認済み plan「to_payload() は空でも全 key を出す」。
+    """
 
-    def test_missing_state_file_falls_back_to_classify(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(root, [
-                _make_thread("cmt-1", "Is this right?", status="needs_agent_review"),
-            ])
-            result = check_gate(root)
-            self.assertEqual(result.gate, "blocked")
-
-
-class GateResultPayloadTest(unittest.TestCase):
-    def test_payload_omits_empty_lists(self) -> None:
-        result = GateResult(gate="open", blocking_threads=[], resolved_actionable=[])
-        payload = result.to_payload()
-        self.assertEqual(payload, {"gate": "open"})
-
-    def test_payload_includes_non_empty_lists(self) -> None:
-        result = GateResult(
-            gate="blocked",
-            blocking_threads=[{"thread_id": "cmt-1", "status": "needs_user_reply"}],
-            resolved_actionable=[],
+    def test_payload_always_contains_all_keys(self) -> None:
+        payload = GateResult(
+            gate="open",
+            needs_agent_review_threads=[],
+            resolved_threads=[],
+            status_counts={"needs_agent_review": 0, "needs_user_reply": 0, "resolved": 0},
+        ).to_payload()
+        self.assertEqual(
+            payload,
+            {
+                "gate": "open",
+                "needs_agent_review_threads": [],
+                "resolved_threads": [],
+                "status_counts": {"needs_agent_review": 0, "needs_user_reply": 0, "resolved": 0},
+            },
         )
-        payload = result.to_payload()
-        self.assertIn("blocking_threads", payload)
-        self.assertNotIn("resolved_actionable", payload)
 
 
 if __name__ == "__main__":

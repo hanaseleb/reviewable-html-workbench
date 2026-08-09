@@ -143,13 +143,6 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn("badge.hidden = !visible;", filter_block)
         self.assertNotIn("highlight.hidden = !visible;", filter_block)
 
-    def test_review_comments_js_does_not_mix_ingestion_classification_into_ui_status(self) -> None:
-        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
-        status_block = script[script.index("const COMMENT_STATUS") : script.index("const STATUS_VALUES")]
-
-        for classification in ["actionable", "needs_clarification", "blocked", "already_addressed"]:
-            self.assertNotIn(classification, status_block)
-
     def test_publish_preview_exports_clean_html_without_review_runtime(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
         publish_script = (ROOT / "templates/assets/publish-export.js").read_text(encoding="utf-8")

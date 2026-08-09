@@ -1,95 +1,78 @@
-"""Resolution gate: block document edits while clarification threads are unresolved."""
+"""Resolution gate: block document edits while threads await an agent reply."""
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from scripts.html_review_workbench.comment_store import CommentStore
-from scripts.html_review_workbench.ingest_review import DEFAULT_STATE_PATH, classify_thread
+
+# comments.json が取りうる status。UI と comment_store の遷移と同じ 3 値。
+GATE_STATUS_VALUES = ("needs_agent_review", "needs_user_reply", "resolved")
 
 
 @dataclass(frozen=True)
 class GateResult:
     gate: str
-    blocking_threads: list[dict[str, str]]
-    resolved_actionable: list[dict[str, str]]
+    needs_agent_review_threads: list[str]
+    resolved_threads: list[str]
+    status_counts: dict[str, int]
 
     def to_payload(self) -> dict[str, Any]:
-        result: dict[str, Any] = {"gate": self.gate}
-        if self.blocking_threads:
-            result["blocking_threads"] = self.blocking_threads
-        if self.resolved_actionable:
-            result["resolved_actionable"] = self.resolved_actionable
-        return result
+        # 空でも全 key を出す。key を省くと返信待ち無しの時に {"gate": "open"} へ
+        # 縮退し、watch-comments の通知行から判断材料が消えるため
+        return {
+            "gate": self.gate,
+            "needs_agent_review_threads": list(self.needs_agent_review_threads),
+            "resolved_threads": list(self.resolved_threads),
+            "status_counts": dict(self.status_counts),
+        }
 
 
 def check_gate(
     root: Path,
     comments_path: str = "annotations/comments.json",
-    state_path: str = DEFAULT_STATE_PATH,
 ) -> GateResult:
     """Check whether the resolution gate is open or blocked.
 
-    The gate is **blocked** when any thread classified as ``needs_clarification``
-    has a status other than ``resolved``.  When the gate is open, the result
-    includes the list of resolved threads that were classified ``actionable``
-    (candidates for document modification).
+    The gate is **blocked** when any thread has status ``needs_agent_review``
+    (the user is waiting for an agent reply).  ``status`` is maintained by
+    :mod:`comment_store` on every reply, so it is the only input here: comment
+    text, surrounding document text and reply order are deliberately ignored.
     """
     root = root.resolve()
     store = CommentStore(root, comments_path)
     payload = store.read("document")
 
-    state = _load_state(root, state_path)
-
-    blocking: list[dict[str, str]] = []
-    resolved_actionable: list[dict[str, str]] = []
+    status_counts = {value: 0 for value in GATE_STATUS_VALUES}
+    needs_agent_review_threads: list[str] = []
+    resolved_threads: list[str] = []
 
     for thread in payload.get("comments", []):
         thread_id = thread.get("id", "")
         status = thread.get("status", "")
-        classification = _get_classification(thread, state)
+        if status in status_counts:
+            status_counts[status] += 1
+        if status == "needs_agent_review":
+            needs_agent_review_threads.append(thread_id)
+        elif status == "resolved":
+            resolved_threads.append(thread_id)
 
-        if classification == "needs_clarification" and status != "resolved":
-            blocking.append({"thread_id": thread_id, "status": status})
-        elif classification == "actionable" and status == "resolved":
-            resolved_actionable.append({"thread_id": thread_id})
-
-    gate = "blocked" if blocking else "open"
+    gate = "blocked" if needs_agent_review_threads else "open"
     return GateResult(
         gate=gate,
-        blocking_threads=blocking,
-        resolved_actionable=resolved_actionable,
+        needs_agent_review_threads=needs_agent_review_threads,
+        resolved_threads=resolved_threads,
+        status_counts=status_counts,
     )
 
 
 def try_check_gate(
     root: Path,
     comments_path: str = "annotations/comments.json",
-    state_path: str = DEFAULT_STATE_PATH,
 ) -> GateResult | None:
     try:
-        return check_gate(root, comments_path=comments_path, state_path=state_path)
+        return check_gate(root, comments_path=comments_path)
     except Exception:
-        return None
-
-
-def _get_classification(thread: dict[str, Any], state: dict[str, Any] | None) -> str:
-    """Return the classification for a thread, using state cache or live classify."""
-    if state:
-        for entry in state.get("classifications", []):
-            if entry.get("comment_id") == thread.get("id"):
-                return entry.get("classification", "")
-    return classify_thread(thread).get("classification", "needs_clarification")
-
-
-def _load_state(root: Path, state_path: str) -> dict[str, Any] | None:
-    path = root / state_path
-    if not path.is_file():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
         return None

@@ -177,7 +177,7 @@ class AddReplyCliTest(unittest.TestCase):
 
             state = json.loads((root / "annotations/review-cycle-state.json").read_text(encoding="utf-8"))
             self.assertEqual(state["summary"]["total"], 1)
-            self.assertEqual(state["summary"]["already_addressed"], 1)
+            self.assertEqual(state["summary"]["needs_user_reply"], 1)
             self.assertEqual(state["summary"]["replies_added"], 0)
 
 

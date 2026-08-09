@@ -19,56 +19,14 @@ from scripts.html_review_workbench.common import (
     resolve_bundle_json_path as _resolve_bundle_json_path,
     write_json,
 )
+from scripts.html_review_workbench.resolution_gate import GATE_STATUS_VALUES
 
 
 DEFAULT_STATE_PATH = "annotations/review-cycle-state.json"
 DEFAULT_AGENT_AUTHOR = "codex"
 
-INGESTION_CLASSIFICATIONS = (
-    "actionable",
-    "needs_clarification",
-    "blocked",
-    "already_addressed",
-)
-COMMENT_STATUS_VALUES = ("needs_agent_review", "needs_user_reply", "resolved")
+COMMENT_STATUS_VALUES = GATE_STATUS_VALUES
 
-_BLOCKED_KEYWORDS = ("blocked", "cannot", "can't", "unable", "missing source", "no access")
-_CLARIFICATION_KEYWORDS = (
-    "clarify",
-    "which",
-    "whether",
-    "should",
-    "what do you mean",
-    "ambiguous",
-    "どちら",
-    "どれ",
-    "未定",
-)
-_ACTION_KEYWORDS = (
-    "replace",
-    "rename",
-    "fix",
-    "typo",
-    "add",
-    "remove",
-    "change",
-    "update",
-    "変更",
-    "置き換え",
-    "置換",
-    "修正",
-    "追加",
-    "削除",
-    "消して",
-    "書いて",
-    "まとめて",
-    "表に",
-    "具体的",
-    "掲載禁止",
-    "一切書かない",
-    "関係無い",
-    "関係ない",
-)
 _REPLACEMENT_PATTERNS = (
     re.compile(r"replace\s+['\"](?P<old>.+?)['\"]\s+with\s+['\"](?P<new>.+?)['\"]", re.IGNORECASE),
     re.compile(r"replace\s+selected\s+text\s+with\s+['\"](?P<new>.+?)['\"]", re.IGNORECASE),
@@ -101,36 +59,36 @@ def ingest_review(
     payload = store.read("document")
     validate_comments_payload(payload)
 
-    classifications: list[dict[str, Any]] = []
+    threads = payload["comments"]
     replies_added = 0
-    for thread in payload["comments"]:
-        classified = classify_thread(thread)
-        classified["reply_added"] = False
-        classified["status_after"] = thread["status"]
-        classifications.append(classified)
 
     model_update_result: dict[str, Any] = {"applied": 0, "skipped": []}
     resolved_model_path = None
     if model_path is not None:
         resolved_model_path = model_path.resolve()
-        if apply_model:
-            model_update_result = apply_limited_model_updates(resolved_model_path, classifications)
-            applied_reply_count = add_implementation_replies(
+        if not apply_model:
+            model_update_result = {"applied": 0, "skipped": ["model updates require --apply-model"]}
+        elif _count_status(threads)["needs_agent_review"]:
+            # 返信待ちが 1 件でも残る間は文書を変えない。gate が blocked のまま
+            # 先に model を書き換えると、返信 → 反映の順序が壊れるため
+            model_update_result = {
+                "applied": 0,
+                "skipped": ["gate is blocked: threads await an agent reply"],
+            }
+        else:
+            model_update_result = apply_limited_model_updates(resolved_model_path, threads)
+            replies_added += add_implementation_replies(
                 payload,
                 model_update_result.get("applied_comment_ids", []),
-                classifications,
                 agent_author=agent_author,
             )
-            replies_added += applied_reply_count
-        else:
-            model_update_result = {"applied": 0, "skipped": ["model updates require --apply-model"]}
 
     store.write(payload)
 
     state = build_review_cycle_state(
         document_id=str(payload["document_id"]),
         comments_path=comments_path,
-        classifications=classifications,
+        threads=threads,
         replies_added=replies_added,
         model_updates=model_update_result,
     )
@@ -139,7 +97,7 @@ def ingest_review(
 
     from scripts.html_review_workbench.resolution_gate import try_check_gate
 
-    gate_result = try_check_gate(root, comments_path=comments_path, state_path=state_path)
+    gate_result = try_check_gate(root, comments_path=comments_path)
     if gate_result is not None:
         gate_payload = gate_result.to_payload()
     else:
@@ -161,84 +119,59 @@ def ingest_review(
     )
 
 
-def classify_thread(thread: dict[str, Any]) -> dict[str, Any]:
-    status = str(thread.get("status", ""))
-    review_text = " ".join(
-        str(thread.get(key, ""))
-        for key in ("selected_text", "prefix", "suffix", "comment")
-        if thread.get(key)
-    )
-    normalized = review_text.lower()
-    classification = "needs_clarification"
-    reason = "default_to_clarification"
-    replacement = extract_replacement(thread)
-
-    if status == "resolved" or _has_agent_implementation_reply(thread):
-        classification = "already_addressed"
-        reason = "thread_already_resolved_or_implemented"
-    elif status == "needs_user_reply" and _has_agent_clarification(thread):
-        classification = "already_addressed"
-        reason = "thread_already_waiting_for_user_reply"
-    elif _contains_any(normalized, _BLOCKED_KEYWORDS):
-        classification = "blocked"
-        reason = "blocked_keyword"
-    elif replacement is not None or _contains_any(normalized, _ACTION_KEYWORDS):
-        classification = "actionable"
-        reason = "action_keyword_or_replacement"
-    elif _contains_any(normalized, _CLARIFICATION_KEYWORDS):
-        classification = "needs_clarification"
-        reason = "clarification_keyword"
-
-    result: dict[str, Any] = {
-        "comment_id": thread["id"],
-        "block_id": thread["block_id"],
-        "classification": classification,
-        "reason": reason,
-        "status_before": status,
-        "status_after": status,
-    }
-    if replacement is not None:
-        result["replacement"] = replacement
-    return result
-
-
 def build_review_cycle_state(
     *,
     document_id: str,
     comments_path: str,
-    classifications: list[dict[str, Any]],
+    threads: list[dict[str, Any]],
     replies_added: int,
     model_updates: dict[str, Any],
 ) -> dict[str, Any]:
-    counts = {value: 0 for value in INGESTION_CLASSIFICATIONS}
-    for item in classifications:
-        counts[item["classification"]] += 1
+    counts = _count_status(threads)
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "document_id": document_id,
         "comments_path": comments_path,
         "generated_at": now_iso(),
         "summary": {
-            "total": len(classifications),
+            "total": len(threads),
             **counts,
             "replies_added": replies_added,
             "model_updates_applied": model_updates.get("applied", 0),
         },
-        "classifications": classifications,
-        "actionable_comment_ids": [
-            item["comment_id"] for item in classifications if item["classification"] == "actionable"
+        "needs_agent_review_ids": [
+            thread["id"] for thread in threads if thread.get("status") == "needs_agent_review"
         ],
-        "blocked_comment_ids": [
-            item["comment_id"] for item in classifications if item["classification"] == "blocked"
-        ],
-        "needs_clarification_comment_ids": [
-            item["comment_id"] for item in classifications if item["classification"] == "needs_clarification"
-        ],
+        "resolved_ids": [thread["id"] for thread in threads if thread.get("status") == "resolved"],
+        "replacement_hints": replacement_hints(threads),
         "model_updates": model_updates,
     }
 
 
-def apply_limited_model_updates(model_path: Path, classifications: list[dict[str, Any]]) -> dict[str, Any]:
+def replacement_hints(threads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """コメント本文から機械的に取り出せる置換指示だけを集める。
+
+    分類の推定はしない。`replace "x" with "y"` の形が書かれた thread だけが残る。
+    """
+    hints: list[dict[str, Any]] = []
+    for thread in threads:
+        replacement = extract_replacement(thread)
+        if replacement is None:
+            continue
+        hints.append(
+            {
+                "comment_id": thread["id"],
+                "block_id": thread["block_id"],
+                "status": thread.get("status", ""),
+                "replacement": replacement,
+            }
+        )
+    return hints
+
+
+def apply_limited_model_updates(
+    model_path: Path, threads: list[dict[str, Any]]
+) -> dict[str, Any]:
     try:
         model = json.loads(model_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
@@ -249,29 +182,32 @@ def apply_limited_model_updates(model_path: Path, classifications: list[dict[str
     applied = 0
     applied_comment_ids: list[str] = []
     skipped: list[dict[str, str]] = []
-    for item in classifications:
-        if item["classification"] != "actionable":
+    for thread in threads:
+        comment_id = thread["id"]
+        # 解決済みのスレッドだけを反映する。未解決の指摘を先回りで適用しない
+        if thread.get("status") != "resolved":
+            skipped.append({"comment_id": comment_id, "reason": "thread_not_resolved"})
             continue
-        replacement = item.get("replacement")
-        if not isinstance(replacement, dict):
-            skipped.append({"comment_id": item["comment_id"], "reason": "no_limited_replacement"})
+        replacement = extract_replacement(thread)
+        if replacement is None:
+            skipped.append({"comment_id": comment_id, "reason": "no_limited_replacement"})
             continue
-        block = _find_model_block(model["blocks"], item["block_id"])
+        block = _find_model_block(model["blocks"], thread["block_id"])
         if block is None:
-            skipped.append({"comment_id": item["comment_id"], "reason": "block_not_found"})
+            skipped.append({"comment_id": comment_id, "reason": "block_not_found"})
             continue
         content = block.get("content")
         if not isinstance(content, str):
-            skipped.append({"comment_id": item["comment_id"], "reason": "block_content_not_string"})
+            skipped.append({"comment_id": comment_id, "reason": "block_content_not_string"})
             continue
         old = replacement["old"]
         new = replacement["new"]
         if old not in content:
-            skipped.append({"comment_id": item["comment_id"], "reason": "selected_text_not_found"})
+            skipped.append({"comment_id": comment_id, "reason": "selected_text_not_found"})
             continue
         block["content"] = content.replace(old, new, 1)
         applied += 1
-        applied_comment_ids.append(item["comment_id"])
+        applied_comment_ids.append(comment_id)
 
     if applied:
         write_json(model_path, model)
@@ -281,7 +217,6 @@ def apply_limited_model_updates(model_path: Path, classifications: list[dict[str
 def add_implementation_replies(
     payload: dict[str, Any],
     applied_comment_ids: object,
-    classifications: list[dict[str, Any]],
     *,
     agent_author: str,
 ) -> int:
@@ -290,31 +225,21 @@ def add_implementation_replies(
     applied_ids = {comment_id for comment_id in applied_comment_ids if isinstance(comment_id, str)}
     if not applied_ids:
         return 0
-    replacements = {
-        item["comment_id"]: item.get("replacement")
-        for item in classifications
-        if item["comment_id"] in applied_ids
-    }
     replies_added = 0
     for thread in payload["comments"]:
         if thread["id"] not in applied_ids:
             continue
-        if not _has_agent_implementation_reply(thread):
-            replacement = replacements.get(thread["id"])
-            thread["replies"].append(
-                make_reply(
-                    author=agent_author,
-                    role="agent",
-                    kind="implementation_note",
-                    body=implementation_reply_body(replacement),
-                )
+        if _has_agent_implementation_reply(thread):
+            continue
+        thread["replies"].append(
+            make_reply(
+                author=agent_author,
+                role="agent",
+                kind="implementation_note",
+                body=implementation_reply_body(extract_replacement(thread)),
             )
-            replies_added += 1
-        thread["status"] = "resolved"
-        for item in classifications:
-            if item["comment_id"] == thread["id"]:
-                item["status_after"] = "resolved"
-                item["reply_added"] = True
+        )
+        replies_added += 1
     return replies_added
 
 
@@ -342,6 +267,15 @@ def resolve_bundle_json_path(root: Path, relative_path: str) -> Path:
     return _resolve_bundle_json_path(root, relative_path, label="state", error=ReviewIngestionError)
 
 
+def _count_status(threads: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {value: 0 for value in COMMENT_STATUS_VALUES}
+    for thread in threads:
+        status = thread.get("status", "")
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
 def _find_model_block(blocks: list[Any], block_id: str) -> dict[str, Any] | None:
     for block in blocks:
         if isinstance(block, dict) and block.get("id") == block_id:
@@ -349,19 +283,8 @@ def _find_model_block(blocks: list[Any], block_id: str) -> dict[str, Any] | None
     return None
 
 
-def _has_agent_clarification(thread: dict[str, Any]) -> bool:
-    return any(
-        isinstance(reply, dict) and reply.get("role") == "agent" and reply.get("kind") == "clarification_request"
-        for reply in thread.get("replies", [])
-    )
-
-
 def _has_agent_implementation_reply(thread: dict[str, Any]) -> bool:
     return any(
         isinstance(reply, dict) and reply.get("role") == "agent" and reply.get("kind") == "implementation_note"
         for reply in thread.get("replies", [])
     )
-
-
-def _contains_any(value: str, keywords: tuple[str, ...]) -> bool:
-    return any(keyword in value for keyword in keywords)

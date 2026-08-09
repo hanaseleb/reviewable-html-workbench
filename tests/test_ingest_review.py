@@ -7,152 +7,83 @@ from pathlib import Path
 
 from scripts.html_review_workbench.ingest_review import (
     COMMENT_STATUS_VALUES,
-    INGESTION_CLASSIFICATIONS,
     ingest_review,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
+_MODEL = {
+    "schema_version": "1.0",
+    "document_id": "minimal-design-doc",
+    "title": "Minimal Design Doc",
+    "generated_at": "2026-05-17T00:00:00+09:00",
+    "blocks": [
+        {
+            "id": "overview",
+            "type": "section",
+            "content": "A minimal section for future renderer tests.",
+        }
+    ],
+}
 
-class IngestReviewTest(unittest.TestCase):
-    def test_ingest_review_classifies_threads_without_writing_clarification_replies(self) -> None:
+
+class IngestReviewStateTest(unittest.TestCase):
+    def test_state_records_status_counts_and_ids_without_writing_replies(self) -> None:
+        """取り込みが status の集計と id の記録だけを行うことを見張る。
+
+        壊れたら起きる不都合: 誰の番かの記録が state から落ち、返信すべき
+        スレッドを agent が見つけられなくなる。または勝手な返信が書き込まれる。
+        期待値の出所: 承認済み plan の state v2 定義。
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             _write_comments(
                 root,
                 [
-                    _thread("cmt-action", "overview", "minimal section", 'Replace "minimal section" with "short section".'),
-                    _thread("cmt-clarify", "overview", "future renderer tests", "Should this become a card?"),
-                    _thread("cmt-blocked", "overview", "future renderer tests", "Blocked: source is missing."),
-                    _thread("cmt-done", "overview", "future renderer tests", "Already fixed.", status="resolved"),
+                    _thread("cmt-waiting", "overview", "minimal section", "これはどういう意味?"),
+                    _thread("cmt-answered", "overview", "text", "何の話?", status="needs_user_reply"),
+                    _thread("cmt-done", "overview", "text", "直した", status="resolved"),
                 ],
             )
 
             result = ingest_review(root)
 
-            self.assertEqual(result.payload["summary"]["total"], 4)
-            self.assertEqual(result.payload["summary"]["actionable"], 1)
-            self.assertEqual(result.payload["summary"]["needs_clarification"], 1)
-            self.assertEqual(result.payload["summary"]["blocked"], 1)
-            self.assertEqual(result.payload["summary"]["already_addressed"], 1)
+            self.assertEqual(result.payload["summary"]["total"], 3)
+            self.assertEqual(result.payload["summary"]["needs_agent_review"], 1)
+            self.assertEqual(result.payload["summary"]["needs_user_reply"], 1)
+            self.assertEqual(result.payload["summary"]["resolved"], 1)
             self.assertEqual(result.payload["summary"]["replies_added"], 0)
-            self.assertIn("gate", result.payload)
-            self.assertIn("gate", result.payload["gate"])
+            self.assertEqual(result.payload["gate"]["gate"], "blocked")
+            self.assertEqual(result.payload["gate"]["needs_agent_review_threads"], ["cmt-waiting"])
 
             comments = json.loads((root / "annotations/comments.json").read_text(encoding="utf-8"))
-            clarify = _find_thread(comments, "cmt-clarify")
-            self.assertEqual(clarify["status"], "needs_agent_review")
-            self.assertEqual(clarify["replies"], [])
+            waiting = _find_thread(comments, "cmt-waiting")
+            self.assertEqual(waiting["status"], "needs_agent_review")
+            self.assertEqual(waiting["replies"], [])
 
             state = json.loads((root / "annotations/review-cycle-state.json").read_text(encoding="utf-8"))
-            self.assertEqual(state["actionable_comment_ids"], ["cmt-action"])
-            self.assertEqual(state["blocked_comment_ids"], ["cmt-blocked"])
-            self.assertEqual(state["needs_clarification_comment_ids"], ["cmt-clarify"])
+            self.assertEqual(state["schema_version"], "2.0")
+            self.assertEqual(state["needs_agent_review_ids"], ["cmt-waiting"])
+            self.assertEqual(state["resolved_ids"], ["cmt-done"])
 
-    def test_japanese_review_comments_are_actionable_without_default_reply(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            _write_comments(
-                root,
-                [
-                    _thread(
-                        "cmt-roles",
-                        "architecture",
-                        "Mac Studio / mac mini",
-                        "Mac Studioと書いてるところは母艦､mac miniと書いてるところはComputer Use実行マシンに全体的に変更",
-                    ),
-                    _thread(
-                        "cmt-specific",
-                        "architecture",
-                        "remote API",
-                        "ここでいってうrremote APIとは具体的に何?",
-                    ),
-                    _thread(
-                        "cmt-table",
-                        "speed",
-                        "高速化手法",
-                        "それぞれの手法でどういう効果がどの程度あったかを実績数値を踏まえて表にまとめて",
-                    ),
-                    _thread(
-                        "cmt-prohibit",
-                        "troubleshooting",
-                        "ChatGPT利用",
-                        "ChagGPT利用云々は記事には一切書かない形で",
-                    ),
-                    _thread("cmt-also-prohibit", "operation", "投入履歴", "これも掲載禁止"),
-                    _thread("cmt-unrelated", "troubleshooting", "repo に混ざる", "一般論としては関係無い話"),
-                    _thread(
-                        "cmt-protocol",
-                        "architecture-flow",
-                        "通信プロトコル",
-                        "通信プロトコルの流れをもう少し具体的に書いて｡何の通信プロトコルの上に何のデータを流してるのかが具体的に欲しい",
-                    ),
-                ],
-            )
-
-            result = ingest_review(root)
-
-            self.assertEqual(result.payload["summary"]["total"], 7)
-            self.assertEqual(result.payload["summary"]["actionable"], 7)
-            self.assertEqual(result.payload["summary"]["needs_clarification"], 0)
-            self.assertEqual(result.payload["summary"]["replies_added"], 0)
-
-            comments = json.loads((root / "annotations/comments.json").read_text(encoding="utf-8"))
-            for thread in comments["comments"]:
-                self.assertEqual(thread["status"], "needs_agent_review")
-                self.assertEqual(thread["replies"], [])
-
-            state = json.loads((root / "annotations/review-cycle-state.json").read_text(encoding="utf-8"))
-            self.assertEqual(
-                state["actionable_comment_ids"],
-                [
-                    "cmt-roles",
-                    "cmt-specific",
-                    "cmt-table",
-                    "cmt-prohibit",
-                    "cmt-also-prohibit",
-                    "cmt-unrelated",
-                    "cmt-protocol",
-                ],
-            )
-            self.assertEqual(state["needs_clarification_comment_ids"], [])
-
-    def test_ingestion_classification_is_separate_from_comment_status(self) -> None:
-        self.assertEqual(set(COMMENT_STATUS_VALUES), {"needs_agent_review", "needs_user_reply", "resolved"})
+    def test_comment_status_values_are_the_three_ui_states(self) -> None:
         self.assertEqual(
-            set(INGESTION_CLASSIFICATIONS),
-            {"actionable", "needs_clarification", "blocked", "already_addressed"},
+            set(COMMENT_STATUS_VALUES), {"needs_agent_review", "needs_user_reply", "resolved"}
         )
-        self.assertTrue(set(COMMENT_STATUS_VALUES).isdisjoint(INGESTION_CLASSIFICATIONS))
 
-        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
-        status_block = script[script.index("const COMMENT_STATUS") : script.index("const STATUS_VALUES")]
-        for classification in INGESTION_CLASSIFICATIONS:
-            self.assertNotIn(classification, status_block)
 
-    def test_apply_model_uses_limited_exact_replacement_only(self) -> None:
+class ApplyModelTest(unittest.TestCase):
+    def test_apply_model_uses_limited_exact_replacement_on_resolved_thread(self) -> None:
+        """解決済みスレッドの機械置換だけが文書へ反映されることを見張る。
+
+        壊れたら起きる不都合: 合意した文言修正が反映されないまま「反映済み」と
+        報告される。期待値の出所: 承認済み plan の反映候補 = status=resolved。
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             model_path = root / "document-model.json"
-            model_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "document_id": "minimal-design-doc",
-                        "title": "Minimal Design Doc",
-                        "generated_at": "2026-05-17T00:00:00+09:00",
-                        "blocks": [
-                            {
-                                "id": "overview",
-                                "type": "section",
-                                "content": "A minimal section for future renderer tests.",
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
+            model_path.write_text(json.dumps(_MODEL), encoding="utf-8")
             _write_comments(
                 root,
                 [
@@ -161,6 +92,7 @@ class IngestReviewTest(unittest.TestCase):
                         "overview",
                         "future renderer tests",
                         'Replace "future renderer tests" with "review workflow checks".',
+                        status="resolved",
                     )
                 ],
             )
@@ -171,15 +103,41 @@ class IngestReviewTest(unittest.TestCase):
             self.assertEqual(model["blocks"][0]["content"], "A minimal section for review workflow checks.")
             self.assertEqual(result.payload["model_updates"]["applied"], 1)
             self.assertEqual(result.payload["summary"]["replies_added"], 1)
-            self.assertIn("gate", result.payload)
             comments = json.loads((root / "annotations/comments.json").read_text(encoding="utf-8"))
             applied = _find_thread(comments, "cmt-replace")
-            self.assertEqual(applied["status"], "resolved")
-            self.assertEqual(applied["replies"][0]["role"], "agent")
             self.assertEqual(applied["replies"][0]["kind"], "implementation_note")
-            state = json.loads((root / "annotations/review-cycle-state.json").read_text(encoding="utf-8"))
-            self.assertEqual(state["summary"]["model_updates_applied"], 1)
-            self.assertEqual(state["classifications"][0]["status_after"], "resolved")
+
+    def test_model_unchanged_while_a_thread_awaits_agent_reply(self) -> None:
+        """返信待ちが残る間は文書を書き換えないことを見張る。
+
+        壊れたら起きる不都合: ユーザーの差し戻しに答えないまま資料だけが
+        書き換わり、返信 → 反映の順序が崩れる。
+        期待値の出所: 承認済み plan「needs_agent_review が残る間は apply しない」。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            model_path = root / "document-model.json"
+            model_path.write_text(json.dumps(_MODEL), encoding="utf-8")
+            _write_comments(
+                root,
+                [
+                    _thread(
+                        "cmt-replace",
+                        "overview",
+                        "future renderer tests",
+                        'Replace "future renderer tests" with "review workflow checks".',
+                        status="resolved",
+                    ),
+                    _thread("cmt-waiting", "overview", "text", "これはまだ答えて無い"),
+                ],
+            )
+
+            result = ingest_review(root, model_path=model_path, apply_model=True)
+
+            model = json.loads(model_path.read_text(encoding="utf-8"))
+            self.assertEqual(model["blocks"][0]["content"], _MODEL["blocks"][0]["content"])
+            self.assertEqual(result.payload["model_updates"]["applied"], 0)
+            self.assertEqual(result.payload["gate"]["gate"], "blocked")
 
     def test_ingest_review_uses_unknown_gate_payload_when_gate_check_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

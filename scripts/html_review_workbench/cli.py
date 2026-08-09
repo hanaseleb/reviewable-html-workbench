@@ -113,13 +113,13 @@ def _check_render_gate(output_dir: Path) -> None:
     if result is None:
         return
     if result.gate == "blocked":
-        thread_ids = [t["thread_id"] for t in result.blocking_threads]
+        thread_ids = result.needs_agent_review_threads
         count = len(thread_ids)
         ids_str = ", ".join(thread_ids)
         print(
-            f"WARNING: Resolution gate is blocked by {count} unresolved "
-            f"clarification thread(s): {ids_str}. "
-            f"Do not proceed with design changes.",
+            f"WARNING: Resolution gate is blocked by {count} thread(s) "
+            f"awaiting agent reply: {ids_str}. "
+            f"Reply to those threads before changing the design.",
             file=sys.stderr,
         )
 
@@ -266,7 +266,6 @@ def check_gates(args: argparse.Namespace) -> int:
     result = run_check_gate(
         Path(args.root),
         comments_path=args.comments,
-        state_path=args.state,
     )
     print(json.dumps(result.to_payload(), ensure_ascii=False))
     return 0
@@ -409,7 +408,7 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
     ),
     _CommandSpec(
         "ingest-review",
-        "Read review comments, classify them, and save review-cycle state.",
+        "Read review comments and save review-cycle state (status counts and thread ids).",
         (
             _CommandArg("--root", required=True),
             _CommandArg("--comments", kwargs={"default": "annotations/comments.json"}),
@@ -440,11 +439,10 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
     ),
     _CommandSpec(
         "check-gates",
-        "Check whether the resolution gate is open or blocked by unresolved clarification threads.",
+        "Check whether the resolution gate is open or blocked by threads awaiting an agent reply.",
         (
             _CommandArg("--root", required=True),
             _CommandArg("--comments", kwargs={"default": "annotations/comments.json"}),
-            _CommandArg("--state", kwargs={"default": "annotations/review-cycle-state.json"}),
         ),
         check_gates,
     ),

@@ -17,8 +17,9 @@ class TestRenderGateWarning(unittest.TestCase):
 
         result = GateResult(
             gate="blocked",
-            blocking_threads=[{"thread_id": "cmt_test1", "status": "needs_user_reply"}],
-            resolved_actionable=[],
+            needs_agent_review_threads=["cmt_test1"],
+            resolved_threads=[],
+            status_counts={"needs_agent_review": 1, "needs_user_reply": 0, "resolved": 0},
         )
         with patch("scripts.html_review_workbench.cli.try_check_gate", return_value=result):
             stderr = io.StringIO()
@@ -36,7 +37,12 @@ class TestRenderGateWarning(unittest.TestCase):
         from scripts.html_review_workbench.cli import _check_render_gate
         from scripts.html_review_workbench.resolution_gate import GateResult
 
-        result = GateResult(gate="open", blocking_threads=[], resolved_actionable=[])
+        result = GateResult(
+            gate="open",
+            needs_agent_review_threads=[],
+            resolved_threads=[],
+            status_counts={"needs_agent_review": 0, "needs_user_reply": 0, "resolved": 0},
+        )
         with patch("scripts.html_review_workbench.cli.try_check_gate", return_value=result):
             stderr = io.StringIO()
             old_stderr = sys.stderr
