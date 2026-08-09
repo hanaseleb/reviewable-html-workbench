@@ -1,10 +1,10 @@
 ---
 id: TASK-20
 title: 拡大表示 (zoom overlay) の背景を theme 追従にする
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-06 02:52'
-updated_date: '2026-08-06 02:54'
+updated_date: '2026-08-06 02:59'
 labels:
   - bug
   - renderer
@@ -25,16 +25,16 @@ ordinal: 20000
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 light theme で zoom overlay を開くと背景が紙色 (--paper-2) になり、dark theme では従来どおり dark になる (headless screenshot で確認)
-- [ ] #2 PNG 保存の背景が overlay 地色 → body 地色 → 白 の順で解決され、透明背景 PNG を作らない
-- [ ] #3 html-design-guidance fragment (ja/en) と両 SKILL.md に mindmap 回避の指針が同期されている
+- [x] #1 light theme で zoom overlay を開くと背景が紙色 (--paper-2) になり、dark theme では従来どおり dark になる (headless screenshot で確認)
+- [x] #2 PNG 保存の背景が overlay 地色 → body 地色 → 白 の順で解決され、透明背景 PNG を作らない
+- [x] #3 html-design-guidance fragment (ja/en) と両 SKILL.md に mindmap 回避の指針が同期されている
 <!-- AC:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Description の ## 決定事項 に決定内容が記録されている
-- [ ] #2 Implementation Plan に決定事項を分解した todo がある
-- [ ] #3 Implementation Notes に検討経緯 (rationale) が記録されている
+- [x] #1 Description の ## 決定事項 に決定内容が記録されている
+- [x] #2 Implementation Plan に決定事項を分解した todo がある
+- [x] #3 Implementation Notes に検討経緯 (rationale) が記録されている
 <!-- DOD:END -->
 
 ## Implementation Plan
@@ -57,3 +57,9 @@ ordinal: 20000
 - 旧実装値を assert していた test 2 件は、変更で実際に落ちたことを確認してから新実装の期待値へ更新 (検知力の実証)。unittest 314 件 OK。
 - ユーザー実機確認済み (2026-08-06 "ok")。
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+zoom overlay の背景/文字/toolbar を紙面 theme 変数 (--paper-2 / --ink) へ変更し、PNG fallback を body 地色 → 白に置換。mindmap の CJK ラベル崩れは mermaid 側の問題と実測で確定し、図示指針に mindmap 回避を追記して両 SKILL.md へ同期。light/dark を headless screenshot で確認、unittest 314 OK、commit 8e9ed1e (v1.28.2) push 済み、CI success。
+<!-- SECTION:FINAL_SUMMARY:END -->

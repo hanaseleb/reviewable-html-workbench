@@ -334,7 +334,20 @@ body.is-col-resizing { cursor: col-resize; user-select: none; }
 .eyebrow a { color: inherit; text-decoration: none; }
 .eyebrow a:hover { text-decoration: underline; }
 h1.doc-title { font-family: var(--font-serif); font-weight: 700; font-size: var(--fs-h1); line-height: 1.18; letter-spacing: 0; margin: 0 0 var(--sp-3); color: var(--ink); text-wrap: pretty; word-break: keep-all; overflow-wrap: break-word; }
-.doc-deck { font-size: var(--fs-lead); line-height: 1.55; color: var(--ink-2); margin: 0; max-width: 60ch; text-wrap: pretty; }
+.doc-deck { font-size: var(--fs-lead); line-height: 1.55; color: var(--ink-2); margin: 0; text-wrap: pretty; }
+
+/* 日本語の折り返し。既定の CJK 改行は文字単位で切れるため、「令和5年」の令と和の間の
+   ような語中で改行が起きる。auto-phrase は文節境界で改行位置を選ぶ (Chrome 119+)。
+   非対応ブラウザと非日本語文書では単に無視され、既定の折り返しに戻る。 */
+:lang(ja) .doc-deck,
+:lang(ja) .prose p,
+:lang(ja) .prose li,
+:lang(ja) .prose dd,
+:lang(ja) .prose dt,
+:lang(ja) .prose th,
+:lang(ja) .prose td,
+:lang(ja) .callout,
+:lang(ja) figcaption { word-break: auto-phrase; }
 
 /* author/agent line */
 .byline { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-4); font-size: var(--fs-small); color: var(--ink-2); flex-wrap: wrap; }
@@ -960,7 +973,6 @@ figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(
 .is-published .doc-shell { max-width: 1600px; padding-top: var(--sp-7); }
 .is-published .paper { padding: var(--sp-7) clamp(28px, 5vw, 64px) var(--sp-8); }
 .is-published .prose p, .is-published .prose ul, .is-published .prose ol,
-.is-published .doc-deck { max-width: none; }
 
 /* 大きなブロックも幅制限解除 */
 .is-published .table-wrap, .is-published .code, .is-published .figure,
