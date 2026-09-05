@@ -206,6 +206,10 @@
               "generated_at": {
                 "type": "string",
                 "minLength": 1
+              },
+              "aspect_ratio": {
+                "type": "number",
+                "exclusiveMinimum": 0
               }
             },
             "additionalProperties": false

@@ -56,6 +56,17 @@ PLAN_PREVIEW_TRIGGER_EXAMPLES = [
     "preview the proposed plan",
 ]
 
+PPTX_TRIGGER_EXAMPLES = [
+    "PPTXをレビュー",
+    "スライドにコメント",
+    "PowerPointを確認",
+    "コメントを反映してPPTXを修正",
+    "review this PPTX",
+    "review this deck",
+    "comment on these slides",
+    "revise the presentation from comments",
+]
+
 
 class CodexSkillIntegrationTest(unittest.TestCase):
     def test_skill_docs_pin_cli_workflows(self) -> None:
@@ -101,6 +112,7 @@ class CodexSkillIntegrationTest(unittest.TestCase):
         visual = _read_simple_yaml(ROOT / "skills/visual-html-renderer/agents/openai.yaml")
         reviewable = _read_simple_yaml(ROOT / "skills/reviewable-design-doc/agents/openai.yaml")
         plan_preview = _read_simple_yaml(ROOT / "skills/plan-preview/agents/openai.yaml")
+        pptx = _read_simple_yaml(ROOT / "skills/reviewable-pptx/agents/openai.yaml")
 
         self.assertEqual(visual["entrypoint"], "python3 -m scripts.html_review_workbench.cli")
         self.assertEqual(visual["working_directory"], "plugin_root")
@@ -120,12 +132,22 @@ class CodexSkillIntegrationTest(unittest.TestCase):
         for trigger in PLAN_PREVIEW_TRIGGER_EXAMPLES:
             self.assertIn(trigger, plan_preview["trigger_examples"])
 
+        self.assertEqual(pptx["entrypoint"], "python3 -m scripts.html_review_workbench.cli")
+        self.assertEqual(pptx["working_directory"], "plugin_root")
+        self.assertEqual(
+            pptx["workflow"],
+            ["build-pptx-review", "preview", "ingest-review", "add-reply", "check-gates", "notify-update"],
+        )
+        for trigger in PPTX_TRIGGER_EXAMPLES:
+            self.assertIn(trigger, pptx["trigger_examples"])
+
     def test_trigger_examples_are_documented_in_skills_and_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         skill_trigger_sets = [
             (ROOT / "skills/visual-html-renderer/SKILL.md", VISUAL_TRIGGER_EXAMPLES),
             (ROOT / "skills/reviewable-design-doc/SKILL.md", REVIEWABLE_TRIGGER_EXAMPLES),
             (ROOT / "skills/plan-preview/SKILL.md", PLAN_PREVIEW_TRIGGER_EXAMPLES),
+            (ROOT / "skills/reviewable-pptx/SKILL.md", PPTX_TRIGGER_EXAMPLES),
         ]
         for skill_path, triggers in skill_trigger_sets:
             skill_text = skill_path.read_text(encoding="utf-8")
@@ -134,7 +156,7 @@ class CodexSkillIntegrationTest(unittest.TestCase):
                 self.assertIn(trigger, readme)
 
     def test_skills_document_language_behavior(self) -> None:
-        for skill in ["visual-html-renderer", "reviewable-design-doc", "plan-preview"]:
+        for skill in ["visual-html-renderer", "reviewable-design-doc", "plan-preview", "reviewable-pptx"]:
             text = (ROOT / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
             self.assertIn("## 言語方針 / Language behavior", text)
             self.assertIn("Follow the language of the latest user request", text)

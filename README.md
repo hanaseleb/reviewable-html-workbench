@@ -1,6 +1,6 @@
 # Reviewable HTML Workbench
 
-[![Test](https://github.com/u-ichi/reviewable-html-workbench/actions/workflows/test.yml/badge.svg)](https://github.com/u-ichi/reviewable-html-workbench/actions/workflows/test.yml)
+[![Test](https://github.com/hanaseleb/reviewable-html-workbench/actions/workflows/test.yml/badge.svg)](https://github.com/hanaseleb/reviewable-html-workbench/actions/workflows/test.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
@@ -22,12 +22,14 @@ Reviewable HTML Workbench solves this by putting the review conversation **insid
 
 Comments are attached to exact document ranges and persisted as structured JSON, so nothing is lost between iterations. When you're satisfied, export the final document as a single self-contained HTML file.
 
-The plugin includes three skills. `visual-html-renderer` creates reviewable visual HTML documents. `reviewable-design-doc` builds review-ready design documents and feeds browser comments back into the agent workflow. `plan-preview` gives Plan Mode proposals a temporary HTML preview URL before implementation starts.
+The plugin includes four skills. `visual-html-renderer` creates reviewable visual HTML documents. `reviewable-design-doc` builds review-ready design documents and feeds browser comments back into the agent workflow. `reviewable-pptx` turns PowerPoint decks into slide-by-slide review sessions and produces revised decks. `plan-preview` gives Plan Mode proposals a temporary HTML preview URL before implementation starts.
 
 ## Features
 
 - **Inline Review Comments**: select any text or image in the preview to leave a comment. Comments are highlighted in the document with margin cards showing status, replies, and threading.
 - **Automatic Agent Replies**: when you add a comment in the browser, the agent can read the selected text and surrounding document context, then write its reply back into the same thread.
+- **Visual Agent Replies**: agents can attach PNG, JPEG, GIF, or WebP proposal images to a comment reply.
+- **PPTX Review and Revision**: converts every slide to PNG, keeps comments attached to stable slide IDs, and guides the agent through producing a validated revised PPTX without overwriting the source.
 - **Resolution-Gated Updates**: clarification threads stay in the document until you resolve them. Once the thread is resolved, the agent can apply the agreed document changes and notify the browser.
 - **Plan Preview URLs**: when a plan needs visual review, the agent can include a temporary Reviewable HTML Workbench preview URL directly in the plan text.
 - **Review Ingestion**: every thread carries a status (`needs_agent_review` / `needs_user_reply` / `resolved`) that says whose turn it is, so a reply you post after the agent's answer always brings the thread back to the agent.
@@ -45,14 +47,14 @@ The plugin includes three skills. `visual-html-renderer` creates reviewable visu
 Add the GitHub repository as a plugin marketplace and install:
 
 ```bash
-claude plugin marketplace add u-ichi/reviewable-html-workbench
+claude plugin marketplace add hanaseleb/reviewable-html-workbench
 claude plugin install reviewable-html-workbench
 ```
 
 Alternatively, clone the repository and install locally:
 
 ```bash
-git clone https://github.com/u-ichi/reviewable-html-workbench.git
+git clone https://github.com/hanaseleb/reviewable-html-workbench.git
 cd reviewable-html-workbench
 claude plugins install .
 ```
@@ -88,7 +90,7 @@ Add the GitHub repository as a plugin marketplace, then add the plugin. This
 repository's marketplace name is `reviewable-html-workbench-local`:
 
 ```bash
-codex plugin marketplace add u-ichi/reviewable-html-workbench
+codex plugin marketplace add hanaseleb/reviewable-html-workbench
 codex plugin add reviewable-html-workbench@reviewable-html-workbench-local
 ```
 
@@ -101,7 +103,7 @@ codex plugin marketplace list
 Or clone and register locally:
 
 ```bash
-git clone https://github.com/u-ichi/reviewable-html-workbench.git
+git clone https://github.com/hanaseleb/reviewable-html-workbench.git
 codex plugin marketplace add ./reviewable-html-workbench
 codex plugin add reviewable-html-workbench@reviewable-html-workbench-local
 ```
@@ -127,6 +129,16 @@ Render this as a visual HTML report
 ```
 
 The agent creates the document, validates it, starts a session-scoped preview, and returns a URL.
+
+For a PowerPoint review, attach a `.pptx` and ask:
+
+```text
+Review this PPTX slide by slide
+```
+
+The same workflow responds to `review this PPTX`, `review this deck`, `comment on these slides`, and `revise the presentation from comments`.
+
+The agent renders each slide as a PNG, opens a review URL, discusses comments in place, and creates a separate revised PPTX after feedback is resolved.
 
 ### 2. Review in the browser
 
@@ -160,6 +172,7 @@ The skills are bilingual. If you ask in English, the agent should use English fo
 |---|---|---|
 | `visual-html-renderer` | Turn content into a polished, reviewable HTML preview with diagrams, images, comments, and publish/download controls. | `visual HTML renderer`, `render this as HTML`, `turn this into HTML`, `create an HTML preview`, `generate a visual HTML report`, `make this a reviewable HTML document`, `diagrammed HTML report` |
 | `reviewable-design-doc` | Create a review-ready design document, watch browser comments, reply in-thread, and apply resolved feedback. | `design doc`, `reviewable design doc`, `create a reviewable design doc`, `make a design doc in HTML`, `build a review-ready design document`, `ingest review comments`, `process review comments`, `reply to review comments`, `apply resolved comments` |
+| `reviewable-pptx` | Review a PPTX slide by slide, attach visual proposals to replies, and create a validated revised deck. | `review this PPTX`, `review this deck`, `comment on these slides`, `revise the presentation from comments`, `PPTXをレビュー`, `スライドにコメント` |
 | `plan-preview` | Add a temporary Reviewable HTML Workbench preview URL that preserves the full proposed plan and adds supplemental visual context before implementation starts. | `graphical plan review`, `graphical plan preview`, `preview this plan as HTML`, `show this plan visually`, `add a plan preview URL`, `preview the proposed plan`, `この計画をHTMLでプレビューして`, `計画をHTMLで確認したい` |
 
 ## Agent / Developer CLI Reference
@@ -174,6 +187,7 @@ python3 -m scripts.html_review_workbench.cli <command>
 
 | Command | Description |
 |---|---|
+| `build-pptx-review` | Convert a PPTX into a validated slide-by-slide review bundle. |
 | `build-model` | Build a document model from natural content. |
 | `render` | Generate an HTML bundle from a document model. |
 | `check-model` | Check whether a document model is ready for final HTML rendering. |
@@ -183,7 +197,7 @@ python3 -m scripts.html_review_workbench.cli <command>
 | `plan-preview-stop` | Stop and clean up an ephemeral plan preview. |
 | `ingest-review` | Read review comments and save review-cycle state (status counts and thread ids). |
 | `validate` | Validate a generated HTML bundle. |
-| `add-reply` | Add an agent reply to a comment thread in `comments.json`. |
+| `add-reply` | Add an agent reply, optionally with an image attachment, to a comment thread. |
 | `check-gates` | Check whether unresolved clarification threads block document updates. |
 | `watch-comments` | Stream browser comment change events from a running preview. |
 | `notify-update` | Notify the browser that the document has been updated. |
@@ -204,6 +218,8 @@ Requirements:
 
 - Python 3.11+
 - No Python package dependencies for the core runtime
+- PPTX review: LibreOffice (`soffice`) and Poppler (`pdftoppm`)
+- PPTX revision: the platform `document-skills:pptx` skill
 - Standard library tests with `unittest`
 
 Run tests:
@@ -244,10 +260,11 @@ Reviewable HTML Workbench は、Claude Code / Codex CLI 向けの HTML レビュ
 
 英語と日本語の両方の依頼に対応します。英語で依頼した場合は進捗、preview案内、レビューコメントへの返信、最終応答も英語に追従します。日本語で依頼した場合は日本語で返します。元資料や引用は、明示的に翻訳を依頼しない限り翻訳しません。
 
-3つの skill を含みます。
+4つの skill を含みます。
 
 - `visual-html-renderer`: HTML生成、図示、Preview Runtime、bundle検証。
 - `reviewable-design-doc`: レビュー可能な設計資料作成、コメント自動検知、agent返信、解決後の設計反映。
+- `reviewable-pptx`: PPTXをスライド単位でレビューし、画像付き返信と改訂版PPTX作成まで行う。
 - `plan-preview`: Plan Mode の計画本文に一時HTMLプレビューURLを追加。
 
 ## 日本語での使い方
@@ -295,6 +312,14 @@ HTMLでプレビューして
 ```text
 図示つきHTML
 ```
+
+PPTXをスライド単位で確認したい場合:
+
+```text
+PPTXをレビュー
+```
+
+`スライドにコメント`、`PowerPointを確認`、`コメントを反映してPPTXを修正` でも同じworkflowが起動します。agentは各ページをPNG化し、コメントへの画像付き提案と改訂版PPTXの作成まで行います。
 
 ### 2. ブラウザでレビューする
 
@@ -352,11 +377,11 @@ proposed_planをプレビューして
 
 ```bash
 # Claude Code（GitHub から直接）
-claude plugin marketplace add u-ichi/reviewable-html-workbench
+claude plugin marketplace add hanaseleb/reviewable-html-workbench
 claude plugin install reviewable-html-workbench
 
 # Codex CLI（GitHub から直接）
-codex plugin marketplace add u-ichi/reviewable-html-workbench
+codex plugin marketplace add hanaseleb/reviewable-html-workbench
 codex plugin add reviewable-html-workbench@reviewable-html-workbench-local
 ```
 

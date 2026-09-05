@@ -351,6 +351,47 @@ class PreviewServerTest(unittest.TestCase):
                 session.process.terminate()
                 session.process.wait(timeout=5)
 
+    def test_preview_server_rejects_stale_comment_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "index.html").write_text("<h1>Preview</h1>", encoding="utf-8")
+            (root / "renderer-manifest.json").write_text(
+                json.dumps({"document": {"id": "doc-preview"}}), encoding="utf-8"
+            )
+            session = start_preview(root, "local", owner_pid=os.getpid(), idle_timeout=0)
+            try:
+                comments_url = session.url.replace("/index.html", "/annotations/comments.json")
+                with urllib.request.urlopen(comments_url, timeout=5) as response:
+                    payload = json.loads(response.read())
+                    etag = response.headers["ETag"]
+                payload["comments"].append(
+                    {
+                        "id": "cmt-1",
+                        "document_id": "doc-preview",
+                        "block_id": "overview",
+                        "selected_text": "text",
+                        "comment": "first writer",
+                        "status": "needs_agent_review",
+                        "created_at": "2026-09-05T00:00:00Z",
+                        "replies": [],
+                    }
+                )
+                request = urllib.request.Request(
+                    comments_url,
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json", "If-Match": etag},
+                    method="PUT",
+                )
+                with urllib.request.urlopen(request, timeout=5):
+                    pass
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(request, timeout=5)
+                self.assertEqual(caught.exception.code, 409)
+            finally:
+                self.assertIsNotNone(session.process)
+                session.process.terminate()
+                session.process.wait(timeout=5)
+
     def test_preview_server_posts_custom_events_to_sse(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

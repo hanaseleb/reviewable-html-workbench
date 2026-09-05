@@ -115,6 +115,7 @@
     selected: null,
     selectionRect: null,
     serverWritable: false,
+    commentsEtag: "",
     ignoreSelectionChange: false,
     activeCommentId: null,
     filter: "all",
@@ -249,6 +250,7 @@
       const response = await fetch(COMMENTS_URL, { cache: "no-store" });
       if (response.ok) {
         state.comments = normalizeComments(await response.json());
+        state.commentsEtag = response.headers.get("ETag") || "";
         state.serverWritable = true;
       } else {
         state.comments = local;
@@ -264,12 +266,17 @@
   async function saveComments() {
     writeLocalComments();
     try {
+      const headers = { "Content-Type": "application/json" };
+      if (state.commentsEtag) {
+        headers["If-Match"] = state.commentsEtag;
+      }
       const response = await fetch(COMMENTS_URL, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(state.comments, null, 2),
       });
       if (response.ok) {
+        state.commentsEtag = response.headers.get("ETag") || state.commentsEtag;
         state.serverWritable = true;
         setStatus("comments.json");
       } else {
@@ -833,17 +840,33 @@
     }
     const replies = thread.replies.map((reply) => {
       const agentClass = reply.role === "agent" ? " from-agent" : "";
+      const attachments = renderReplyAttachments(reply);
       return [
         `<div class="reply${agentClass}">`,
         `  <div class="av">${escapeHtml(replyInitials(reply))}</div>`,
         "  <div>",
         `    <div class="reply-name">${escapeHtml(replyAuthor(reply))}<span class="reply-time">${escapeHtml(formatDateTime(reply.created_at))}</span></div>`,
         `    <div class="reply-body">${renderCommentMarkdown(reply.body)}</div>`,
+        attachments,
         "  </div>",
         "</div>",
       ].join("");
     }).join("");
     return `<div class="cmt-thread">${replies}</div>`;
+  }
+
+  function renderReplyAttachments(reply) {
+    if (!Array.isArray(reply.attachments)) {
+      return "";
+    }
+    return reply.attachments.filter((attachment) => {
+      return attachment?.type === "image" &&
+        /^annotations\/reply-assets\/[A-Za-z0-9_.-]+$/.test(attachment.path || "");
+    }).map((attachment) => {
+      const path = escapeHtml(attachment.path);
+      const alt = escapeHtml(attachment.alt || "Reply image");
+      return `<a class="reply-image" href="${path}" target="_blank" rel="noopener"><img src="${path}" alt="${alt}" loading="lazy"></a>`;
+    }).join("");
   }
 
   function enterCommentEditMode(display, editor) {
@@ -1994,6 +2017,7 @@
       if (!response.ok) {
         return;
       }
+      state.commentsEtag = response.headers.get("ETag") || state.commentsEtag;
       var payload = normalizeComments(await response.json());
       mergeRemoteComments(payload);
     } catch (_error) {

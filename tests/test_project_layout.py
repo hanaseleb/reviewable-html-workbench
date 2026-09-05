@@ -59,8 +59,8 @@ class ProjectLayoutTest(unittest.TestCase):
         payload = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
         for field in ["name", "version", "description", "author", "license", "keywords", "skills", "interface"]:
             self.assertIn(field, payload)
-        self.assertEqual(payload["repository"], "https://github.com/u-ichi/reviewable-html-workbench")
-        self.assertEqual(payload["homepage"], "https://github.com/u-ichi/reviewable-html-workbench")
+        self.assertEqual(payload["repository"], "https://github.com/hanaseleb/reviewable-html-workbench")
+        self.assertEqual(payload["homepage"], "https://github.com/hanaseleb/reviewable-html-workbench")
 
         interface = payload["interface"]
         for field in [
@@ -82,7 +82,7 @@ class ProjectLayoutTest(unittest.TestCase):
         self.assertIn("Preview this plan as HTML", interface["defaultPrompt"])
 
     def test_required_skills_exist(self) -> None:
-        for skill in ["visual-html-renderer", "reviewable-design-doc", "plan-preview"]:
+        for skill in ["visual-html-renderer", "reviewable-design-doc", "plan-preview", "reviewable-pptx"]:
             path = ROOT / "skills" / skill / "SKILL.md"
             self.assertTrue(path.exists(), skill)
             text = path.read_text(encoding="utf-8")
@@ -146,6 +146,7 @@ class ProjectLayoutTest(unittest.TestCase):
             set(cli.COMMAND_CONTRACT),
             {
                 "build-model",
+                "build-pptx-review",
                 "attach-image",
                 "render",
                 "check-model",
@@ -163,6 +164,7 @@ class ProjectLayoutTest(unittest.TestCase):
             },
         )
         self.assertEqual(cli.COMMAND_CONTRACT["build-model"]["required_options"], ("--output",))
+        self.assertEqual(cli.COMMAND_CONTRACT["build-pptx-review"]["required_options"], ("--input", "--output"))
         self.assertEqual(cli.COMMAND_CONTRACT["attach-image"]["required_options"], ("--model", "--block-id", "--image"))
         self.assertEqual(cli.COMMAND_CONTRACT["render"]["required_options"], ("--model", "--output"))
         self.assertEqual(cli.COMMAND_CONTRACT["check-model"]["required_options"], ("--model",))

@@ -82,6 +82,58 @@ class AddReplyCliTest(unittest.TestCase):
             self.assertEqual(reply["kind"], "implementation_note")
             self.assertEqual(reply["body"], "Implemented by updating the renderer.")
 
+    def test_add_reply_copies_and_records_image_attachment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_comments(root, [_thread("cmt-1")])
+            image = root / "proposal.png"
+            image.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            result = _run_cli(
+                "add-reply",
+                "--root",
+                str(root),
+                "--thread-id",
+                "cmt-1",
+                "--body",
+                "このレイアウトを提案します。",
+                "--image",
+                str(image),
+                "--image-alt",
+                "提案後のスライド",
+            )
+
+            output = json.loads(result.stdout)
+            attachment = output["attachments"][0]
+            self.assertEqual(attachment["type"], "image")
+            self.assertEqual(attachment["alt"], "提案後のスライド")
+            self.assertTrue((root / attachment["path"]).is_file())
+            reply = _read_comments(root)["comments"][0]["replies"][0]
+            self.assertEqual(reply["attachments"], [attachment])
+
+    def test_add_reply_rejects_unsafe_image_type(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_comments(root, [_thread("cmt-1")])
+            image = root / "proposal.svg"
+            image.write_text("<svg/>", encoding="utf-8")
+
+            result = _run_cli(
+                "add-reply",
+                "--root",
+                str(root),
+                "--thread-id",
+                "cmt-1",
+                "--body",
+                "proposal",
+                "--image",
+                str(image),
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("reply image must be PNG", json.loads(result.stdout)["error"])
+
     def test_add_reply_publishes_agent_comment_updated_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
