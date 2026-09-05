@@ -35,6 +35,7 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
             "threadCardState",
             "normalizeThreadStatus",
             "showSaveError",
+            "renderReplyAttachments",
         ]:
             self.assertIn(f"function {function_name}", script)
 
@@ -45,6 +46,15 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
             "downloadPublishedDoc",
         ]:
             self.assertIn(f"function {function_name}", publish_script)
+
+    def test_agent_reply_images_are_rendered_as_safe_links(self) -> None:
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        style = (ROOT / "templates/style.css").read_text(encoding="utf-8")
+
+        self.assertIn("annotations\\/reply-assets", script)
+        self.assertIn('class="reply-image"', script)
+        self.assertIn('rel="noopener"', script)
+        self.assertIn(".reply-image img", style)
 
     def test_line_selection_uses_deferred_capture_and_range_endpoint_fallback(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
@@ -315,6 +325,13 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
         self.assertIn("showSaveError(errorMessage);", save_block)
         self.assertIn("saveError:", ja_block)
         self.assertIn("saveError:", en_block)
+
+    def test_comment_saves_use_server_etags_to_reject_stale_writes(self) -> None:
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        save_block = script[script.index("async function saveComments") : script.index("function scheduleSelectionCapture")]
+
+        self.assertIn('response.headers.get("ETag")', script)
+        self.assertIn('headers["If-Match"] = state.commentsEtag;', save_block)
 
     def test_event_source_initialized_after_load(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")

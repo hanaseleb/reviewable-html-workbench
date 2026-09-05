@@ -1,0 +1,21 @@
+display_name: Reviewable PPTX
+short_description: PPTXをスライド単位でレビューし、画像付き返信と改訂版作成まで扱う / Review and revise PPTX decks.
+default_prompt: Review this PPTX slide by slide and apply resolved feedback / このPPTXをスライド単位でレビューして
+trigger_examples:
+  - PPTXをレビュー
+  - スライドにコメント
+  - PowerPointを確認
+  - コメントを反映してPPTXを修正
+  - review this PPTX
+  - review this deck
+  - comment on these slides
+  - revise the presentation from comments
+entrypoint: python3 -m scripts.html_review_workbench.cli
+working_directory: plugin_root
+workflow:
+  - build-pptx-review
+  - preview
+  - ingest-review
+  - add-reply
+  - check-gates
+  - notify-update

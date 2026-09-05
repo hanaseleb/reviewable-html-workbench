@@ -138,6 +138,22 @@
                 "created_at": {
                   "type": "string",
                   "minLength": 1
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["type", "path", "alt"],
+                    "properties": {
+                      "type": { "const": "image" },
+                      "path": {
+                        "type": "string",
+                        "pattern": "^annotations/reply-assets/[A-Za-z0-9_.-]+$"
+                      },
+                      "alt": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
                 }
               },
               "additionalProperties": false

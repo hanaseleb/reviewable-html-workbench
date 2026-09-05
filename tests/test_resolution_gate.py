@@ -6,12 +6,16 @@
 
 from __future__ import annotations
 
+import argparse
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from scripts.html_review_workbench.resolution_gate import check_gate, GateResult
+from scripts.html_review_workbench.cli import check_gates
 
 
 def _write_comments(root: Path, threads: list[dict]) -> None:
@@ -126,6 +130,23 @@ class GateIsDecidedByStatusAloneTest(unittest.TestCase):
             root = Path(tmp)
             _write_comments(root, [])
             self.assertEqual(check_gate(root).gate, "open")
+
+    def test_strict_cli_gate_requires_every_thread_to_be_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_comments(root, [_make_thread("cmt-waiting", "確認してください", status="needs_user_reply")])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = check_gates(
+                    argparse.Namespace(
+                        root=str(root),
+                        comments="annotations/comments.json",
+                        require_resolved=True,
+                    )
+                )
+
+            self.assertEqual(code, 1)
+            self.assertEqual(json.loads(output.getvalue())["unresolved_threads"], ["cmt-waiting"])
 
     def test_mixed_threads_report_ids_and_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

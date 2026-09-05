@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -114,7 +115,8 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         self.touch_activity()
         path = self._path()
         if path == self.comments_route:
-            self._send_json(self.store.read(self._document_id()))
+            payload = self.store.read(self._document_id())
+            self._send_json(payload, headers={"ETag": _comments_etag(payload)})
             return
         if path == self.events_route:
             self._handle_sse()
@@ -134,15 +136,27 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
             return
         try:
             payload = json.loads(self.rfile.read(_content_length(self)).decode("utf-8"))
-            self.store.write(payload)
-        except (json.JSONDecodeError, CommentStoreError) as exc:
+            with self.store.locked():
+                current = self.store.read(self._document_id())
+                expected = self.headers.get("If-Match")
+                if expected and expected != _comments_etag(current):
+                    self._send_json(
+                        {"ok": False, "error": "comments changed since they were loaded; reload and retry"},
+                        status=HTTPStatus.CONFLICT,
+                    )
+                    return
+                self.store.write(payload)
+        except (json.JSONDecodeError, CommentStoreError, OSError) as exc:
             self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
         # この書き込みはこの場で配信するので、file_watcher が再配信しないよう記録する
         self.change_tracker.announce(self._comments_mtime())
         source = self.headers.get("X-Comment-Source", "browser")
         self.event_bus.publish("comment_updated", {"source": source})
-        self._send_json({"ok": True, "path": "annotations/comments.json"})
+        self._send_json(
+            {"ok": True, "path": "annotations/comments.json"},
+            headers={"ETag": _comments_etag(payload)},
+        )
 
     def do_POST(self) -> None:
         self.touch_activity()
@@ -232,11 +246,18 @@ class ReviewPreviewHandler(SimpleHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
 
-    def _send_json(self, payload: dict[str, object], status: HTTPStatus = HTTPStatus.OK) -> None:
+    def _send_json(
+        self,
+        payload: dict[str, object],
+        status: HTTPStatus = HTTPStatus.OK,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -305,6 +326,11 @@ def _content_length(handler: SimpleHTTPRequestHandler) -> int:
     if length <= 0:
         raise CommentStoreError("request body is required")
     return length
+
+
+def _comments_etag(payload: dict[str, object]) -> str:
+    body = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f'"{hashlib.sha256(body).hexdigest()}"'
 
 
 def _start_owner_watchdog(

@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.html_review_workbench.comment_store import CommentStore, CommentStoreError
+from scripts.html_review_workbench.comment_store import CommentStore, CommentStoreError, copy_reply_image
 from scripts.html_review_workbench.image_assets import ImageAssetError, attach_image_to_model
 from scripts.html_review_workbench.ingest_review import ReviewIngestionError, ingest_review as run_ingest_review
 from scripts.html_review_workbench.model_builder import ModelBuildError, build_model_from_source
@@ -25,6 +25,7 @@ from scripts.html_review_workbench.plan_preview import (
 )
 from scripts.html_review_workbench.export_pdf import ExportPdfError, export_pdf as run_export_pdf
 from scripts.html_review_workbench.publish import PublishError, publish_bundle
+from scripts.html_review_workbench.pptx_review import PptxReviewError, build_pptx_review as run_build_pptx_review
 from scripts.html_review_workbench.render import render_bundle
 from scripts.html_review_workbench.preview_server import (
     DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS,
@@ -220,6 +221,9 @@ def add_reply(args: argparse.Namespace) -> int:
         store = CommentStore(root, args.comments)
         payload = store.read("document")
         document_id = payload["document_id"]
+        if not any(thread.get("id") == args.thread_id for thread in payload["comments"]):
+            raise CommentStoreError(f"comment thread not found: {args.thread_id}")
+        attachments = [copy_reply_image(root, Path(args.image), args.image_alt)] if args.image else None
         reply = store.add_reply(
             document_id=document_id,
             thread_id=args.thread_id,
@@ -227,6 +231,7 @@ def add_reply(args: argparse.Namespace) -> int:
             role="agent",
             kind=args.kind,
             body=args.body,
+            attachments=attachments,
         )
     except CommentStoreError as exc:
         return _fail(exc)
@@ -238,10 +243,27 @@ def add_reply(args: argparse.Namespace) -> int:
                 "thread_id": args.thread_id,
                 "reply_id": reply["id"],
                 "thread_status": "needs_user_reply",
+                "attachments": reply.get("attachments", []),
             },
             ensure_ascii=False,
         )
     )
+    return 0
+
+
+def build_pptx_review(args: argparse.Namespace) -> int:
+    try:
+        result = run_build_pptx_review(
+            Path(args.input),
+            Path(args.output),
+            title=args.title,
+            lang=args.lang,
+            dpi=args.dpi,
+            continue_review=args.continue_review,
+        )
+    except (OSError, PptxReviewError) as exc:
+        return _fail(exc)
+    print(json.dumps(result.to_payload(), ensure_ascii=False))
     return 0
 
 
@@ -267,8 +289,14 @@ def check_gates(args: argparse.Namespace) -> int:
         Path(args.root),
         comments_path=args.comments,
     )
-    print(json.dumps(result.to_payload(), ensure_ascii=False))
-    return 0
+    payload = result.to_payload()
+    if args.require_resolved:
+        comments = CommentStore(Path(args.root), args.comments).read("document")["comments"]
+        unresolved = [thread["id"] for thread in comments if thread.get("status") != "resolved"]
+        payload["gate"] = "blocked" if unresolved else "open"
+        payload["unresolved_threads"] = unresolved
+    print(json.dumps(payload, ensure_ascii=False))
+    return 1 if args.require_resolved and payload["gate"] == "blocked" else 0
 
 
 def watch_comments(args: argparse.Namespace) -> int:
@@ -325,6 +353,19 @@ def _build_command_contract(specs: tuple[_CommandSpec, ...]) -> dict[str, dict[s
 
 
 _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
+    _CommandSpec(
+        "build-pptx-review",
+        "Convert a PPTX into a slide-by-slide reviewable HTML bundle.",
+        (
+            _CommandArg("--input", required=True),
+            _CommandArg("--output", required=True),
+            _CommandArg("--title"),
+            _CommandArg("--lang", kwargs={"choices": ["ja", "en"], "default": "ja"}),
+            _CommandArg("--dpi", kwargs={"type": int, "default": 150}),
+            _CommandArg("--continue-review", kwargs={"action": "store_true"}),
+        ),
+        build_pptx_review,
+    ),
     _CommandSpec(
         "build-model",
         "Build a document model from natural content.",
@@ -434,6 +475,8 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
             _CommandArg("--comments", kwargs={"default": "annotations/comments.json"}),
             _CommandArg("--kind", kwargs={"default": "answer"}),
             _CommandArg("--author", kwargs={"default": "agent"}),
+            _CommandArg("--image"),
+            _CommandArg("--image-alt"),
         ),
         add_reply,
     ),
@@ -443,6 +486,7 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
         (
             _CommandArg("--root", required=True),
             _CommandArg("--comments", kwargs={"default": "annotations/comments.json"}),
+            _CommandArg("--require-resolved", kwargs={"action": "store_true"}),
         ),
         check_gates,
     ),

@@ -185,13 +185,15 @@ def _render_image(block: dict[str, Any], image_src: str | None) -> str:
     alt = escape(str(image.get("alt") or block.get("title") or block["id"]), quote=True)
     caption = image.get("caption") or block.get("content")
     src_escaped = escape(image_src, quote=True)
+    aspect_ratio = image.get("aspect_ratio")
+    aspect_style = f' style="aspect-ratio:{float(aspect_ratio):.6g}"' if isinstance(aspect_ratio, (int, float)) and aspect_ratio > 0 else ""
     tag_label = escape(Path(image_src).name)
     caption_parts = []
     if caption:
         caption_parts.append(f"  <figcaption><span class=\"fc-no\">図</span>{escape(str(caption))}</figcaption>\n")
     return (
         '<figure class="figure generated-image">\n'
-        f'  <div class="gen-image">'
+        f'  <div class="gen-image"{aspect_style}>'
         f'<span class="gi-tag">generated-image · {tag_label}</span>'
         f'<img src="{src_escaped}" alt="{alt}" loading="lazy" style="width:100%;height:100%;object-fit:contain;position:absolute;inset:0;">'
         f'</div>\n'

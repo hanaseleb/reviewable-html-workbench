@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+import fcntl
 
 from scripts.html_review_workbench.common import (
     COMMENTS_SCHEMA_PATH,
@@ -19,6 +24,7 @@ from scripts.html_review_workbench.schema_validation import validate
 
 DEFAULT_COMMENTS_PATH = "annotations/comments.json"
 DEFAULT_STATUS = "needs_agent_review"
+REPLY_IMAGE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
 class CommentStoreError(ValueError):
@@ -46,8 +52,24 @@ class CommentStore:
 
     def write(self, payload: dict[str, Any]) -> Path:
         validate_comments_payload(payload)
-        write_json(self.path, payload, ensure_parent=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_name(f".{self.path.name}.{_new_id()}.tmp")
+        try:
+            write_json(temporary, payload)
+            os.replace(temporary, self.path)
+        finally:
+            temporary.unlink(missing_ok=True)
         return self.path
+
+    @contextmanager
+    def locked(self) -> Iterator[None]:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with (self.path.parent / ".comments.lock").open("a+b") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
 
     def add_thread(
         self,
@@ -61,19 +83,20 @@ class CommentStore:
         status: str = DEFAULT_STATUS,
         created_at: str | None = None,
     ) -> dict[str, Any]:
-        payload = self.read(document_id)
-        thread = make_thread(
-            document_id=document_id,
-            block_id=block_id,
-            selected_text=selected_text,
-            comment=comment,
-            prefix=prefix,
-            suffix=suffix,
-            status=status,
-            created_at=created_at,
-        )
-        payload["comments"].append(thread)
-        self.write(payload)
+        with self.locked():
+            payload = self.read(document_id)
+            thread = make_thread(
+                document_id=document_id,
+                block_id=block_id,
+                selected_text=selected_text,
+                comment=comment,
+                prefix=prefix,
+                suffix=suffix,
+                status=status,
+                created_at=created_at,
+            )
+            payload["comments"].append(thread)
+            self.write(payload)
         return thread
 
     def add_reply(
@@ -85,21 +108,31 @@ class CommentStore:
         role: str,
         kind: str,
         body: str,
+        attachments: list[dict[str, str]] | None = None,
         created_at: str | None = None,
     ) -> dict[str, Any]:
-        payload = self.read(document_id)
-        thread = _find_thread(payload, thread_id)
-        reply = make_reply(author=author, role=role, kind=kind, body=body, created_at=created_at)
-        thread["replies"].append(reply)
-        thread["status"] = _status_after_reply(role)
-        self.write(payload)
+        with self.locked():
+            payload = self.read(document_id)
+            thread = _find_thread(payload, thread_id)
+            reply = make_reply(
+                author=author,
+                role=role,
+                kind=kind,
+                body=body,
+                attachments=attachments,
+                created_at=created_at,
+            )
+            thread["replies"].append(reply)
+            thread["status"] = _status_after_reply(role)
+            self.write(payload)
         return reply
 
     def update_status(self, *, document_id: str, thread_id: str, status: str) -> dict[str, Any]:
-        payload = self.read(document_id)
-        thread = _find_thread(payload, thread_id)
-        thread["status"] = status
-        self.write(payload)
+        with self.locked():
+            payload = self.read(document_id)
+            thread = _find_thread(payload, thread_id)
+            thread["status"] = status
+            self.write(payload)
         return thread
 
 
@@ -140,7 +173,15 @@ def make_thread(
     return payload
 
 
-def make_reply(*, author: str, role: str, kind: str, body: str, created_at: str | None = None) -> dict[str, Any]:
+def make_reply(
+    *,
+    author: str,
+    role: str,
+    kind: str,
+    body: str,
+    attachments: list[dict[str, str]] | None = None,
+    created_at: str | None = None,
+) -> dict[str, Any]:
     payload = {
         "id": f"reply_{_new_id()}",
         "author": author,
@@ -149,6 +190,8 @@ def make_reply(*, author: str, role: str, kind: str, body: str, created_at: str 
         "body": body,
         "created_at": created_at or now_iso(),
     }
+    if attachments:
+        payload["attachments"] = attachments
     schema = _comments_schema()["properties"]["comments"]["items"]["properties"]["replies"]["items"]
     errors = validate(payload, schema)
     if errors:
@@ -164,6 +207,27 @@ def validate_comments_payload(payload: dict[str, Any]) -> None:
 
 def resolve_comments_path(root: Path, comments_path: str = DEFAULT_COMMENTS_PATH) -> Path:
     return _resolve_bundle_json_path(root, comments_path, label="comments", error=CommentStoreError)
+
+
+def copy_reply_image(root: Path, image_path: Path, alt: str | None = None) -> dict[str, str]:
+    image_path = image_path.resolve()
+    suffix = image_path.suffix.lower()
+    if not image_path.is_file():
+        raise CommentStoreError(f"reply image not found: {image_path}")
+    if suffix not in REPLY_IMAGE_SUFFIXES:
+        raise CommentStoreError("reply image must be PNG, JPEG, GIF, or WebP")
+    target_dir = root.resolve() / "annotations" / "reply-assets"
+    target = target_dir / f"reply_{_new_id()}{suffix}"
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(image_path, target)
+    except OSError as exc:
+        raise CommentStoreError(f"could not copy reply image: {exc}") from exc
+    return {
+        "type": "image",
+        "path": target.relative_to(root.resolve()).as_posix(),
+        "alt": alt or image_path.stem,
+    }
 
 
 def _comments_schema() -> dict[str, Any]:
