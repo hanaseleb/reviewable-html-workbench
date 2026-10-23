@@ -1,32 +1,43 @@
 ---
 name: reviewable-pptx
 description: |
-  Convert PPTX presentations into slide-by-slide reviewable HTML previews, discuss browser comments in the same threads, attach visual proposal images to agent replies, and produce a validated revised PPTX after feedback is resolved. Use whenever a user provides a .pptx and asks to review slides, comment on a deck, discuss presentation changes, receive visual feedback, or revise a PowerPoint from review comments. Triggers: PPTXをレビュー, スライドにコメント, PowerPointを確認, コメントを反映してPPTXを修正, review this PPTX, review this deck, comment on these slides, revise the presentation from comments. 使用しない場面: PPTXを伴わない通常のHTML文書レビュー、計画だけのプレビュー。
+  Convert PPTX or PDF presentations into page-by-page reviewable HTML previews, discuss browser comments in the same threads, attach visual proposal images to agent replies, and produce a validated revision after feedback is resolved. PPTX input can return PPTX or PDF; PDF input always returns PDF. Use whenever a user asks to review or revise a presentation or PDF with positional comments. Triggers: PPTXをレビュー, PDFをレビュー, スライドにコメント, PDFにコメント, PowerPointを確認, コメントを反映してPPTXを修正, review this PPTX, review this PDF, review this deck, comment on these slides, revise the presentation from comments. 使用しない場面: 添付資料を伴わない通常のHTML文書レビュー、計画だけのプレビュー。
 ---
 
-# Reviewable PPTX
+# Reviewable PPTX / PDF
 
-PPTXをスライド画像としてレビューし、コメントへの回答・視覚案・最終PPTXまで同じスレッドで扱う。
+PPTXまたはPDFをページ画像としてレビューし、位置注釈、コメントへの回答、視覚案、改訂ファイルまで同じスレッドで扱う。
 
 ## 原則
 
-- 元PPTXを上書きしない。最終成果物は `<stem>-revised.pptx` とする。
-- コメント未解決の間は本番PPTXを変更しない。提案画像は一時コピーから生成する。
+- 元ファイルを上書きしない。PPTX入力は最終形式をPPTXかPDFから選び、PDF入力はPDFだけを返す。
+- 出力名は `<stem>-revised.pptx` または `<stem>-revised.pdf` とする。
+- コメント未解決の間は本番ファイルを変更しない。提案画像は一時コピーから生成する。
 - PPTX編集は実行環境の標準PPTX skill/toolingを使う。このpluginへ外部skillのコードを複製しない。
-- スライドのコメント対応は `document-model.json` の `metadata.pptx.slides` で `block_id` とページ番号を対応づける。
+- `document-model.json` の `metadata.pptx.slides` または `metadata.pdf.pages` で `block_id` とページ番号を対応づける。
 - 日本語依頼には日本語、英語依頼には英語で返信する。
 
 ## 言語方針 / Language behavior
 
-Follow the language of the latest user request for progress updates, preview handoff text, comment replies, and final responses. 元のPPTX本文は、明示的に翻訳を求められない限り翻訳しない。
+Follow the language of the latest user request for progress updates, preview handoff text, comment replies, and final responses. 元資料は、明示的に翻訳を求められない限り翻訳しない。
 
 ## 1. レビューを開始する
+
+入力の拡張子と署名を確認する。PPTX入力で最終形式が未指定なら `pptx` / `pdf` をユーザーに選んでもらう。PDF入力は `pdf` に固定し、PPTXを選択肢に出さない。
 
 renderer repo rootを作業ディレクトリにして実行する。現在のチャットやworkspaceのcwdをrepo rootとして扱わない。
 
 ```bash
+# PPTX input
 python3 -m scripts.html_review_workbench.cli build-pptx-review \
   --input <absolute-input.pptx> \
+  --output <absolute-review-dir> \
+  --final-format <pptx-or-pdf> \
+  --lang ja
+
+# PDF input
+python3 -m scripts.html_review_workbench.cli build-pdf-review \
+  --input <absolute-input.pdf> \
   --output <absolute-review-dir> \
   --lang ja
 
@@ -35,9 +46,11 @@ python3 -m scripts.html_review_workbench.cli preview \
   --mode local
 ```
 
-返却JSONの `url` と `stop_command` をユーザーへ渡す。preview起動後は `watch-comments --root <absolute-review-dir>` を監視として開始する。別端末からの閲覧が明示された場合だけ `--mode tailscale` を使い、tailnet内で資料を閲覧できる範囲をユーザーへ伝える。
+返却JSONの `url` と `stop_command` を渡し、`watch-comments --root <absolute-review-dir>` を開始する。別端末からの閲覧が明示された場合だけ `--mode tailscale` を使う。
 
 ## 2. コメントへ回答する
+
+画像をクリックすると点注釈、ドラッグすると矩形注釈になる。座標は画像幅・高さに対する0〜1の比率なので再描画後も位置を保つ。
 
 コメント更新を検知したら `ingest-review` を実行し、`needs_agent_review` の全スレッドへ `add-reply` で回答する。
 
@@ -50,7 +63,7 @@ python3 -m scripts.html_review_workbench.cli add-reply \
   --body "<回答>"
 ```
 
-視覚案が理解を早める場合は、元PPTXの一時コピーへ提案を適用してPNG化し、返信へ添付する。画像だけで結論を伝えず、本文にも変更点を書く。
+視覚案が理解を早める場合は、一時コピーへ提案を適用してPNG化し、本文説明と一緒に返信へ添付する。
 
 ```bash
 python3 -m scripts.html_review_workbench.cli add-reply \
@@ -58,57 +71,62 @@ python3 -m scripts.html_review_workbench.cli add-reply \
   --thread-id <thread-id> \
   --kind answer \
   --body "<提案内容>" \
-  --image <absolute-proposal-slide.png> \
-  --image-alt "<提案後のスライド説明>"
+  --image <absolute-proposal-page.png> \
+  --image-alt "<提案後のページ説明>"
 ```
 
-確認が必要なら `--kind clarification_request` を使う。ユーザーが返信するとスレッドは再び `needs_agent_review` になるため、合意まで同じ場所で続ける。
+確認が必要なら `--kind clarification_request` を使い、合意まで同じスレッドで続ける。
 
-## 3. 最終PPTXへ反映する
+## 3. 最終成果物へ反映する
 
-1. `check-gates --require-resolved` で全コメントがユーザー合意済みであることを確認する。終了コード1なら変更しない。
-2. `resolved` のコメントだけを元PPTXのコピーへ反映する。
-3. 標準PPTX skillの手順で内容抽出、OOXML構造検証、全スライド画像QAを行う。
-4. 改訂版を同じreview dirへ再投入する。既存document IDとコメント履歴は保持される。
-5. `notify-update` でブラウザへ更新を知らせる。
+1. `check-gates --require-resolved` を実行する。終了コード1なら変更しない。
+2. `resolved` のコメントだけを元ファイルのコピーへ反映する。
+3. PPTX入力では標準PPTX skill (`document-skills:pptx`) で編集・OOXML検証・全ページ画像QAを行う。PDF指定なら改訂PPTXを一時成果物としてPDFへ書き出し、PDFだけを納品する。
+4. PDF入力では必要に応じてページを再構成し、改訂PDFだけを生成・検証する。元PDFが画像主体なら編集可能性を保証しない。
+5. 改訂版を同じreview dirへ `--continue-review` で再投入し、`notify-update` を実行する。
 
 ```bash
 python3 -m scripts.html_review_workbench.cli check-gates \
   --root <absolute-review-dir> \
   --require-resolved
-```
 
-```bash
+# Revised PPTX source (final output may be PPTX or PDF)
 python3 -m scripts.html_review_workbench.cli build-pptx-review \
   --input <absolute-revised.pptx> \
+  --output <absolute-review-dir> \
+  --final-format <pptx-or-pdf> \
+  --lang ja \
+  --continue-review
+
+# Revised PDF source
+python3 -m scripts.html_review_workbench.cli build-pdf-review \
+  --input <absolute-revised.pdf> \
   --output <absolute-review-dir> \
   --lang ja \
   --continue-review
 
 python3 -m scripts.html_review_workbench.cli notify-update \
   --root <absolute-review-dir> \
-  --message "PPTXを更新しました"
+  --message "改訂版を更新しました"
 ```
 
-最終応答には改訂版PPTXのパス、反映したコメント、未反映コメント、検証結果を含める。
+最終応答には改訂ファイルのパス、反映・未反映コメント、検証結果を含める。
 
 ## 実シナリオ検証
 
-リリース前に実PPTXで次を確認する。
-
-1. 全スライドがPNG化され、レビュー画面で欠けずに表示される。
-2. ブラウザでコメントし、`ingest-review` が同じスライドIDを返す。
+1. 全ページがPNG化され、レビュー画面で欠けずに表示される。
+2. 点・矩形コメントを作成し、`ingest-review` が同じページIDと座標を返す。
 3. `add-reply --image` の本文と画像が同じスレッドに表示される。
-4. コメントを解決して改訂版を同じreview dirへ再投入し、コメント履歴と添付画像が残る。
-5. 元PPTXのhashが変わらず、改訂版PPTXの構造検証と全スライド画像QAが通る。
+4. 解決後に同じreview dirへ再投入し、コメント履歴と添付画像が残る。
+5. 元ファイルのhashが変わらず、選択した改訂形式の構造検証と全ページ画像QAが通る。
 
 ## 必須依存
 
-- PNG化: LibreOffice (`soffice`) と Poppler (`pdftoppm`)
-- 改訂版PPTX作成: platform標準のPPTX skill。Claude Code/Codex環境では `document-skills:pptx` を使う。
+- PNG化とPDF出力: LibreOffice (`soffice`) と Poppler (`pdftoppm`, `pdfinfo`)
+- PPTX編集: platform標準の `document-skills:pptx`
 
-開始時に3点を確認する。PPTX skillがない環境ではレビューとコメント返信までに留め、改訂機能が使えないことをユーザーへ明示する。
+開始時に依存を確認する。PPTX skillがない環境ではレビューとコメント返信までに留め、改訂機能が使えないことを明示する。
 
 ## English workflow
 
-Run `build-pptx-review`, start `preview`, and monitor `watch-comments`. Reply to every `needs_agent_review` thread with `add-reply`. Attach a rendered proposal slide with `--image` when visual feedback is useful. Apply only resolved feedback to a new `<stem>-revised.pptx`, validate it with the platform PPTX tooling, rebuild the same review directory, and call `notify-update`. Never overwrite the source deck.
+For PPTX input, ask for a PPTX or PDF final output when unspecified; for PDF input, always return PDF. Run `build-pptx-review --final-format ...` or `build-pdf-review`, then `preview` and `watch-comments`. A click creates a point annotation and a drag creates a rectangle. Reply with `add-reply`, optionally attaching proposal images. Apply only resolved feedback, validate the selected final format, rebuild the same review directory with `--continue-review`, and call `notify-update`. Never overwrite the source.

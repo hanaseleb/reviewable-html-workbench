@@ -72,8 +72,20 @@ class ReviewCommentsJavaScriptTest(unittest.TestCase):
 
         self.assertIn('event.target.closest?.(".generated-image img")', script)
         self.assertIn("clearDocumentSelectionForNonTextTarget()", script)
-        self.assertIn('selectedText: image.getAttribute("alt")', script)
+        self.assertIn("selectedText: imageAnnotationLabel(", script)
+        self.assertIn('anchor: { type: "point", x, y }', script)
         self.assertIn("image.getBoundingClientRect()", script)
+
+    def test_image_comments_support_point_and_rectangle_annotations(self) -> None:
+        script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")
+        style = (ROOT / "templates/style.css").read_text(encoding="utf-8")
+
+        for function_name in ["beginImageAnnotation", "updateImageAnnotation", "finishImageAnnotation", "renderImageAnnotation"]:
+            self.assertIn(f"function {function_name}", script)
+        self.assertIn('anchor: { type: "point", x, y }', script)
+        self.assertIn('anchor: { type: "rect", x, y, width, height }', script)
+        self.assertIn(".image-annotation-point", style)
+        self.assertIn(".image-annotation-rect", style)
 
     def test_comment_click_links_highlight_and_margin_card(self) -> None:
         script = (ROOT / "templates/review-comments.js").read_text(encoding="utf-8")

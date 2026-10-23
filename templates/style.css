@@ -878,6 +878,13 @@ body.zoom-open { overflow: hidden; }
   border: 1px solid var(--line-2); border-radius: var(--r-xs); padding: 2px 7px;
 }
 .gen-image .gi-center { text-align: center; color: var(--ink-3); font-family: var(--font-mono); font-size: var(--fs-small); padding: 10px 16px; }
+.generated-image img { user-select: none; -webkit-user-drag: none; cursor: crosshair; }
+.image-annotation-draft { position: absolute; z-index: 3; border: 2px dashed var(--open); background: color-mix(in srgb, var(--open) 14%, transparent); pointer-events: none; }
+.image-annotation { position: absolute; z-index: 4; margin: 0; padding: 0; border: 2px solid var(--open); color: var(--ink-inverse); background: var(--open); font: 700 10px/1 var(--font-mono); cursor: pointer; }
+.image-annotation-point { width: 24px; height: 24px; border-radius: 50%; transform: translate(-50%, -50%); }
+.image-annotation-rect { min-width: 14px; min-height: 14px; background: color-mix(in srgb, var(--open) 16%, transparent); color: var(--open); }
+.image-annotation[data-state="reply"] { border-color: var(--reply); background-color: var(--reply); }
+.image-annotation[data-state="resolved"] { border-color: var(--resolved); background-color: color-mix(in srgb, var(--resolved) 12%, transparent); color: var(--resolved); }
 .gen-image .gi-center .gi-dim { display:block; font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
 figcaption { margin-top: 8px; font-size: var(--fs-caption); color: var(--ink-3); display: flex; gap: 8px; }
 figcaption .fc-no { font-family: var(--font-mono); font-weight: 600; color: var(--ink-2); }

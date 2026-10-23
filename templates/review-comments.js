@@ -116,6 +116,8 @@
     selectionRect: null,
     serverWritable: false,
     commentsEtag: "",
+    imageDrag: null,
+    ignoreNextImageClick: false,
     ignoreSelectionChange: false,
     activeCommentId: null,
     filter: "all",
@@ -145,6 +147,9 @@
   document.addEventListener("keyup", scheduleSelectionCapture);
   document.addEventListener("mouseup", scheduleSelectionCapture);
   document.addEventListener("pointerup", scheduleSelectionCapture);
+  document.addEventListener("pointerdown", beginImageAnnotation);
+  document.addEventListener("pointermove", updateImageAnnotation);
+  document.addEventListener("pointerup", finishImageAnnotation);
   document.addEventListener("scroll", hideFloatingUi, true);
   document.addEventListener("click", handleDocumentClick);
   window.addEventListener("resize", schedulePositionCards);
@@ -305,13 +310,16 @@
   }
 
   function shouldIgnoreSelectionCaptureEvent(event) {
+    if (state.imageDrag) {
+      return true;
+    }
     if (!event?.target) {
       return false;
     }
     if (ui.root.contains(event.target) || ui.commentRail?.contains(event.target)) {
       return true;
     }
-    return Boolean(event.target.closest?.(".cx[data-comment], [data-comment-badge]"));
+    return Boolean(event.target.closest?.(".cx[data-comment], [data-comment-badge], .generated-image img"));
   }
 
   function captureSelection() {
@@ -416,7 +424,8 @@
         block.classList.add("has-review-replies");
       }
       if (block) {
-        const highlighted = highlightThreadSelection(block, thread, index + 1);
+        const highlighted = renderImageAnnotation(block, thread, index + 1) ||
+          highlightThreadSelection(block, thread, index + 1);
         if (!highlighted) {
           addBlockCommentBadge(block, thread, index + 1);
         }
@@ -486,6 +495,38 @@
       activate(thread.id, true);
     });
     container.appendChild(badge);
+  }
+
+  function renderImageAnnotation(block, thread, number) {
+    const anchor = thread.anchor;
+    if (!anchor || !["point", "rect"].includes(anchor.type)) {
+      return false;
+    }
+    const layer = block.querySelector(".generated-image .gen-image");
+    if (!layer) {
+      return false;
+    }
+    const marker = document.createElement("button");
+    marker.type = "button";
+    marker.className = `cx image-annotation image-annotation-${anchor.type}`;
+    marker.dataset.comment = thread.id || "";
+    marker.dataset.commentBadge = thread.id || "";
+    marker.dataset.state = threadCardState(thread);
+    marker.setAttribute("aria-label", `Comment ${number}`);
+    marker.textContent = String(number);
+    marker.style.left = `${anchor.x * 100}%`;
+    marker.style.top = `${anchor.y * 100}%`;
+    if (anchor.type === "rect") {
+      marker.style.width = `${anchor.width * 100}%`;
+      marker.style.height = `${anchor.height * 100}%`;
+    }
+    marker.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      activate(thread.id, true);
+    });
+    layer.appendChild(marker);
+    return true;
   }
 
   function highlightThreadSelection(block, thread, number) {
@@ -1654,22 +1695,118 @@
     if (!block) {
       return false;
     }
+    if (state.ignoreNextImageClick) {
+      state.ignoreNextImageClick = false;
+      return true;
+    }
     event.preventDefault();
     event.stopPropagation();
     clearDocumentSelectionForNonTextTarget();
     const title = block.querySelector("h2")?.textContent?.trim();
     const caption = block.querySelector("figcaption")?.textContent?.trim();
+    const rect = image.getBoundingClientRect();
+    const x = clamp01((event.clientX - rect.left) / rect.width);
+    const y = clamp01((event.clientY - rect.top) / rect.height);
     setSelected(
       {
         blockId: block.dataset.reviewBlock,
-        selectedText: image.getAttribute("alt") || title || caption || "Image",
+        selectedText: imageAnnotationLabel(image, title, caption, "point", x, y),
         prefix: "",
         suffix: caption || "",
-        anchor: null,
+        anchor: { type: "point", x, y },
       },
-      image.getBoundingClientRect(),
+      { left: event.clientX, right: event.clientX, top: event.clientY, bottom: event.clientY, width: 0, height: 0 },
     );
     return true;
+  }
+
+  function beginImageAnnotation(event) {
+    const image = event.target.closest?.(".generated-image img");
+    if (!image || event.button !== 0 || document.body.classList.contains("is-published")) {
+      return;
+    }
+    event.preventDefault();
+    clearDocumentSelectionForNonTextTarget();
+    const rect = image.getBoundingClientRect();
+    const draft = document.createElement("div");
+    draft.className = "image-annotation-draft";
+    image.parentElement.appendChild(draft);
+    state.imageDrag = {
+      image,
+      block: image.closest("[data-review-block]"),
+      rect,
+      draft,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  }
+
+  function updateImageAnnotation(event) {
+    const drag = state.imageDrag;
+    if (!drag) {
+      return;
+    }
+    const left = Math.max(drag.rect.left, Math.min(drag.startX, event.clientX));
+    const top = Math.max(drag.rect.top, Math.min(drag.startY, event.clientY));
+    const right = Math.min(drag.rect.right, Math.max(drag.startX, event.clientX));
+    const bottom = Math.min(drag.rect.bottom, Math.max(drag.startY, event.clientY));
+    Object.assign(drag.draft.style, {
+      left: `${left - drag.rect.left}px`,
+      top: `${top - drag.rect.top}px`,
+      width: `${right - left}px`,
+      height: `${bottom - top}px`,
+    });
+  }
+
+  function finishImageAnnotation(event) {
+    const drag = state.imageDrag;
+    if (!drag) {
+      return;
+    }
+    state.imageDrag = null;
+    drag.draft.remove();
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (Math.hypot(dx, dy) < 8 || !drag.block) {
+      return;
+    }
+    event.preventDefault();
+    state.ignoreNextImageClick = true;
+    window.setTimeout(() => { state.ignoreNextImageClick = false; }, 0);
+    const left = Math.max(drag.rect.left, Math.min(drag.startX, event.clientX));
+    const top = Math.max(drag.rect.top, Math.min(drag.startY, event.clientY));
+    const right = Math.min(drag.rect.right, Math.max(drag.startX, event.clientX));
+    const bottom = Math.min(drag.rect.bottom, Math.max(drag.startY, event.clientY));
+    const x = clamp01((left - drag.rect.left) / drag.rect.width);
+    const y = clamp01((top - drag.rect.top) / drag.rect.height);
+    const width = clamp01((right - left) / drag.rect.width);
+    const height = clamp01((bottom - top) / drag.rect.height);
+    if (!width || !height) {
+      return;
+    }
+    const title = drag.block.querySelector("h2")?.textContent?.trim();
+    const caption = drag.block.querySelector("figcaption")?.textContent?.trim();
+    setSelected(
+      {
+        blockId: drag.block.dataset.reviewBlock,
+        selectedText: imageAnnotationLabel(drag.image, title, caption, "rect", x, y),
+        prefix: "",
+        suffix: caption || "",
+        anchor: { type: "rect", x, y, width, height },
+      },
+      { left, right, top, bottom, width: right - left, height: bottom - top },
+    );
+  }
+
+  function imageAnnotationLabel(image, title, caption, type, x, y) {
+    const name = image.getAttribute("alt") || title || caption || "Image";
+    const position = `${Math.round(x * 100)}%, ${Math.round(y * 100)}%`;
+    const kind = type === "rect" ? (lang === "ja" ? "範囲" : "area") : (lang === "ja" ? "点" : "point");
+    return `${name} — ${kind} ${position}`;
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
   }
 
   function preserveDocumentSelection(event) {

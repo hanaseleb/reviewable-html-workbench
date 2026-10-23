@@ -58,10 +58,13 @@ PLAN_PREVIEW_TRIGGER_EXAMPLES = [
 
 PPTX_TRIGGER_EXAMPLES = [
     "PPTXをレビュー",
+    "PDFをレビュー",
     "スライドにコメント",
+    "PDFにコメント",
     "PowerPointを確認",
     "コメントを反映してPPTXを修正",
     "review this PPTX",
+    "review this PDF",
     "review this deck",
     "comment on these slides",
     "revise the presentation from comments",
@@ -136,7 +139,7 @@ class CodexSkillIntegrationTest(unittest.TestCase):
         self.assertEqual(pptx["working_directory"], "plugin_root")
         self.assertEqual(
             pptx["workflow"],
-            ["build-pptx-review", "preview", "ingest-review", "add-reply", "check-gates", "notify-update"],
+            ["build-pptx-review", "build-pdf-review", "preview", "ingest-review", "add-reply", "check-gates", "notify-update"],
         )
         for trigger in PPTX_TRIGGER_EXAMPLES:
             self.assertIn(trigger, pptx["trigger_examples"])

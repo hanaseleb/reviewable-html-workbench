@@ -28,6 +28,7 @@ class PptxReviewTest(unittest.TestCase):
             self.assertEqual([block["id"] for block in model["blocks"]], ["slide-256", "slide-412"])
             self.assertAlmostEqual(model["blocks"][0]["image"]["aspect_ratio"], 16 / 9, places=4)
             self.assertEqual(first.slide_count, 2)
+            self.assertEqual(model["metadata"]["pptx"]["final_format"], "pptx")
             self.assertIn('data-review-block="slide-256"', (output / "index.html").read_text(encoding="utf-8"))
 
             comments_path = output / "annotations" / "comments.json"
@@ -69,6 +70,18 @@ class PptxReviewTest(unittest.TestCase):
                 continued = build_pptx_review(revision, output, continue_review=True)
 
             self.assertEqual(continued.document_id, first.document_id)
+
+    def test_records_pdf_as_selected_final_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "deck.pptx"
+            _write_minimal_pptx(source, [256], 12_192_000, 6_858_000)
+            with patch("scripts.html_review_workbench.pptx_review._convert_to_pdf", return_value=root / "deck.pdf"), patch(
+                "scripts.html_review_workbench.pptx_review._render_pdf_to_pngs", return_value=[_png(root / "slide.png")]
+            ):
+                build_pptx_review(source, root / "review", final_format="pdf")
+            model = json.loads((root / "review/document-model.json").read_text())
+            self.assertEqual(model["metadata"]["pptx"]["final_format"], "pdf")
 
 
 def _write_minimal_pptx(path: Path, slide_ids: list[int], cx: int, cy: int) -> None:

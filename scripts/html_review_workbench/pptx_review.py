@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 import zipfile
@@ -54,6 +55,7 @@ def build_pptx_review(
     lang: str = "ja",
     dpi: int = 150,
     continue_review: bool = False,
+    final_format: str = "pptx",
 ) -> PptxReviewResult:
     pptx_path = pptx_path.resolve()
     output_dir = output_dir.resolve()
@@ -65,6 +67,8 @@ def build_pptx_review(
         raise PptxReviewError("lang must be ja or en")
     if not 72 <= dpi <= 300:
         raise PptxReviewError("dpi must be between 72 and 300")
+    if final_format not in {"pptx", "pdf"}:
+        raise PptxReviewError("final_format must be pptx or pdf")
 
     slide_ids, aspect_ratio = read_slide_ids_and_aspect_ratio(pptx_path)
     source_sha256 = hashlib.sha256(pptx_path.read_bytes()).hexdigest()
@@ -78,6 +82,7 @@ def build_pptx_review(
         source_sha256,
         {f"slide-{slide_id}" for slide_id in slide_ids},
         continue_review,
+        "pptx",
     )
 
     with tempfile.TemporaryDirectory(prefix="rhw-pptx-") as tmp:
@@ -144,6 +149,7 @@ def build_pptx_review(
                 "source_sha256": source_sha256,
                 "dpi": dpi,
                 "slide_count": len(slide_ids),
+                "final_format": final_format,
                 "slides": slide_map,
             },
         },
@@ -163,6 +169,120 @@ def build_pptx_review(
     if not validation.ok:
         raise PptxReviewError("generated review bundle is invalid: " + "; ".join(validation.errors))
     return PptxReviewResult(output_dir, model_path, index_path, len(slide_ids), document_id)
+
+
+def build_pdf_review(
+    pdf_path: Path,
+    output_dir: Path,
+    *,
+    title: str | None = None,
+    lang: str = "ja",
+    dpi: int = 150,
+    continue_review: bool = False,
+) -> PptxReviewResult:
+    pdf_path = pdf_path.resolve()
+    output_dir = output_dir.resolve()
+    if not pdf_path.is_file():
+        raise PptxReviewError(f"PDF file not found: {pdf_path}")
+    if pdf_path.suffix.lower() != ".pdf" or pdf_path.read_bytes()[:5] != b"%PDF-":
+        raise PptxReviewError(f"input must be a valid .pdf file: {pdf_path}")
+    if lang not in {"ja", "en"}:
+        raise PptxReviewError("lang must be ja or en")
+    if not 72 <= dpi <= 300:
+        raise PptxReviewError("dpi must be between 72 and 300")
+
+    source_sha256 = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_path = output_dir / "document-model.json"
+    existing_model = _read_existing_model(model_path)
+    document_id = _existing_document_id(existing_model) or f"pdf-{source_sha256[:12]}"
+
+    with tempfile.TemporaryDirectory(prefix="rhw-pdf-") as tmp:
+        rendered = _render_pdf_to_pngs(pdf_path, Path(tmp) / "rendered", dpi)
+        if not rendered:
+            raise PptxReviewError("PDF conversion produced no PNG files")
+        page_ids = [f"page-{number:03d}" for number in range(1, len(rendered) + 1)]
+        _check_review_continuation(
+            output_dir,
+            existing_model,
+            source_sha256,
+            set(page_ids),
+            continue_review,
+            "pdf",
+        )
+        page_dir = output_dir / "pdf-pages"
+        page_dir.mkdir(parents=True, exist_ok=True)
+        for old in page_dir.glob("page-*.png"):
+            old.unlink()
+        for number, source in enumerate(rendered, 1):
+            shutil.copy2(source, page_dir / f"page-{number:03d}.png")
+
+    generated_at = now_iso()
+    blocks = []
+    page_map = []
+    for number, page_id in enumerate(page_ids, 1):
+        relative_image = f"pdf-pages/page-{number:03d}.png"
+        label = f"ページ {number}" if lang == "ja" else f"Page {number}"
+        blocks.append(
+            {
+                "id": page_id,
+                "type": "image",
+                "title": label,
+                "heading_level": 2,
+                "content": label,
+                "review_required": True,
+                "image": {
+                    "prompt": f"Rendered preview of {label}",
+                    "alt": label,
+                    "caption": label,
+                    "generation_status": "generated",
+                    "source_path": relative_image,
+                    "generated_at": generated_at,
+                    "aspect_ratio": _png_aspect_ratio(output_dir / relative_image),
+                },
+            }
+        )
+        page_map.append({"block_id": page_id, "page_number": number})
+
+    model = {
+        "schema_version": "1.0",
+        "document_id": document_id,
+        "title": title or pdf_path.stem,
+        "summary": (
+            "各ページ画像にポイントまたは矩形の修正コメントを追加してください。"
+            if lang == "ja"
+            else "Add point or rectangle comments to each page image."
+        ),
+        "generated_at": generated_at,
+        "metadata": {
+            "lang": lang,
+            "eyebrow": "PDF Review",
+            "deck": pdf_path.name,
+            "status": "draft",
+            "status_label": "レビュー中" if lang == "ja" else "In review",
+            "pdf": {
+                "source_name": pdf_path.name,
+                "source_sha256": source_sha256,
+                "dpi": dpi,
+                "page_count": len(page_ids),
+                "final_format": "pdf",
+                "pages": page_map,
+            },
+        },
+        "review_settings": {"enabled": True, "mode": "review-server"},
+        "blocks": blocks,
+    }
+    write_json(model_path, model)
+    comments_path = output_dir / "annotations" / "comments.json"
+    if not comments_path.is_file():
+        CommentStore(output_dir).write(empty_comments(document_id))
+    for stale in (output_dir / "assets" / "images").glob("page-*.png"):
+        stale.unlink()
+    index_path = render_bundle(model_path, output_dir)
+    validation = validate_bundle(output_dir)
+    if not validation.ok:
+        raise PptxReviewError("generated review bundle is invalid: " + "; ".join(validation.errors))
+    return PptxReviewResult(output_dir, model_path, index_path, len(page_ids), document_id)
 
 
 def read_slide_ids_and_aspect_ratio(pptx_path: Path) -> tuple[list[str], float]:
@@ -224,6 +344,16 @@ def _render_pdf_to_pngs(pdf_path: Path, output_dir: Path, dpi: int) -> list[Path
     return [path for _, path in sorted(images)]
 
 
+def _png_aspect_ratio(path: Path) -> float:
+    header = path.read_bytes()[:24]
+    if len(header) != 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+        raise PptxReviewError(f"rendered page is not a valid PNG: {path}")
+    width, height = struct.unpack(">II", header[16:24])
+    if not width or not height:
+        raise PptxReviewError(f"rendered page has invalid dimensions: {path}")
+    return round(width / height, 6)
+
+
 def _run(command: list[str], label: str) -> None:
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=180)
@@ -255,17 +385,20 @@ def _check_review_continuation(
     source_sha256: str,
     new_block_ids: set[str],
     continue_review: bool,
+    source_kind: str,
 ) -> None:
     if existing_model is None:
         return
     metadata = existing_model.get("metadata")
-    pptx = metadata.get("pptx") if isinstance(metadata, dict) else None
-    previous_sha256 = pptx.get("source_sha256") if isinstance(pptx, dict) else None
+    source = metadata.get(source_kind) if isinstance(metadata, dict) else None
+    if not isinstance(source, dict):
+        raise PptxReviewError("output belongs to a different review source type; choose a new output directory")
+    previous_sha256 = source.get("source_sha256")
     if previous_sha256 == source_sha256:
         return
     if not continue_review:
         raise PptxReviewError(
-            "output already contains a different PPTX review; use --continue-review only for its verified revision"
+            "output already contains a different source review; use --continue-review only for its verified revision"
         )
     comments = CommentStore(output_dir).read(_existing_document_id(existing_model) or "document")
     orphaned = sorted(
@@ -274,4 +407,4 @@ def _check_review_continuation(
         if thread.get("status") != "resolved" and thread.get("block_id") not in new_block_ids
     )
     if orphaned:
-        raise PptxReviewError("revised PPTX no longer contains unresolved reviewed slides: " + ", ".join(orphaned))
+        raise PptxReviewError("revised document no longer contains unresolved reviewed pages: " + ", ".join(orphaned))

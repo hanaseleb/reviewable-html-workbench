@@ -42,6 +42,17 @@ class SchemaValidationTest(unittest.TestCase):
 
         self.assertIn("$.comments[0].status", {error.path for error in errors})
 
+    def test_image_point_and_rectangle_anchors_are_valid(self) -> None:
+        schema = _read_json(ROOT / "schemas/comments.schema.json")
+        fixture = _read_json(ROOT / "tests/fixtures/minimal_comments.json")
+        for anchor in [
+            {"type": "point", "x": 0.25, "y": 0.75},
+            {"type": "rect", "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4},
+        ]:
+            with self.subTest(anchor=anchor["type"]):
+                fixture["comments"][0]["anchor"] = anchor
+                self.assertEqual(validate(fixture, schema), [])
+
     def test_preview_session_rejects_wildcard_bind(self) -> None:
         schema = _read_json(ROOT / "schemas/preview-session.schema.json")
         fixture = _read_json(ROOT / "tests/fixtures/minimal_preview_session.json")

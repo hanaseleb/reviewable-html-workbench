@@ -147,6 +147,7 @@ class ProjectLayoutTest(unittest.TestCase):
             {
                 "build-model",
                 "build-pptx-review",
+                "build-pdf-review",
                 "attach-image",
                 "render",
                 "check-model",
@@ -165,6 +166,7 @@ class ProjectLayoutTest(unittest.TestCase):
         )
         self.assertEqual(cli.COMMAND_CONTRACT["build-model"]["required_options"], ("--output",))
         self.assertEqual(cli.COMMAND_CONTRACT["build-pptx-review"]["required_options"], ("--input", "--output"))
+        self.assertEqual(cli.COMMAND_CONTRACT["build-pdf-review"]["required_options"], ("--input", "--output"))
         self.assertEqual(cli.COMMAND_CONTRACT["attach-image"]["required_options"], ("--model", "--block-id", "--image"))
         self.assertEqual(cli.COMMAND_CONTRACT["render"]["required_options"], ("--model", "--output"))
         self.assertEqual(cli.COMMAND_CONTRACT["check-model"]["required_options"], ("--model",))

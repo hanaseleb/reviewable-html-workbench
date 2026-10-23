@@ -25,7 +25,11 @@ from scripts.html_review_workbench.plan_preview import (
 )
 from scripts.html_review_workbench.export_pdf import ExportPdfError, export_pdf as run_export_pdf
 from scripts.html_review_workbench.publish import PublishError, publish_bundle
-from scripts.html_review_workbench.pptx_review import PptxReviewError, build_pptx_review as run_build_pptx_review
+from scripts.html_review_workbench.pptx_review import (
+    PptxReviewError,
+    build_pdf_review as run_build_pdf_review,
+    build_pptx_review as run_build_pptx_review,
+)
 from scripts.html_review_workbench.render import render_bundle
 from scripts.html_review_workbench.preview_server import (
     DEFAULT_PREVIEW_IDLE_TIMEOUT_SECONDS,
@@ -260,10 +264,29 @@ def build_pptx_review(args: argparse.Namespace) -> int:
             lang=args.lang,
             dpi=args.dpi,
             continue_review=args.continue_review,
+            final_format=args.final_format,
         )
     except (OSError, PptxReviewError) as exc:
         return _fail(exc)
     print(json.dumps(result.to_payload(), ensure_ascii=False))
+    return 0
+
+
+def build_pdf_review(args: argparse.Namespace) -> int:
+    try:
+        result = run_build_pdf_review(
+            Path(args.input),
+            Path(args.output),
+            title=args.title,
+            lang=args.lang,
+            dpi=args.dpi,
+            continue_review=args.continue_review,
+        )
+    except (OSError, PptxReviewError) as exc:
+        return _fail(exc)
+    payload = result.to_payload()
+    payload["page_count"] = payload.pop("slide_count")
+    print(json.dumps(payload, ensure_ascii=False))
     return 0
 
 
@@ -363,8 +386,22 @@ _COMMAND_SPECS: tuple[_CommandSpec, ...] = (
             _CommandArg("--lang", kwargs={"choices": ["ja", "en"], "default": "ja"}),
             _CommandArg("--dpi", kwargs={"type": int, "default": 150}),
             _CommandArg("--continue-review", kwargs={"action": "store_true"}),
+            _CommandArg("--final-format", kwargs={"choices": ["pptx", "pdf"], "default": "pptx"}),
         ),
         build_pptx_review,
+    ),
+    _CommandSpec(
+        "build-pdf-review",
+        "Convert a PDF into a page-by-page reviewable HTML bundle.",
+        (
+            _CommandArg("--input", required=True),
+            _CommandArg("--output", required=True),
+            _CommandArg("--title"),
+            _CommandArg("--lang", kwargs={"choices": ["ja", "en"], "default": "ja"}),
+            _CommandArg("--dpi", kwargs={"type": int, "default": 150}),
+            _CommandArg("--continue-review", kwargs={"action": "store_true"}),
+        ),
+        build_pdf_review,
     ),
     _CommandSpec(
         "build-model",
